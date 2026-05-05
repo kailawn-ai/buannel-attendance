@@ -1,7 +1,16 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  async rewrites() {
+    return [
+      {
+        // When you call /api/proxy/attendance/login...
+        source: "/api/proxy/:path*",
+        // ...it actually fetches from the real backend
+        destination: "https://api.buannelstudio.in/api/:path*",
+      },
+    ];
+  },
 };
 
 export default nextConfig;

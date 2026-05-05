@@ -1,9 +1,17 @@
 "use client";
 
-import { CalendarCheck, LayoutDashboard, UserCircle, Users } from "lucide-react";
+import {
+  CalendarCheck,
+  LayoutDashboard,
+  UserCircle,
+  Users,
+} from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { LucideIcon } from "lucide-react";
+import { useEffect, useState } from "react";
+import { getCachedAuth } from "@/lib/auth-cache";
+import Image from "next/image";
 
 type NavItem = {
   label: string;
@@ -12,21 +20,9 @@ type NavItem = {
 };
 
 const navItems: NavItem[] = [
-  {
-    label: "Dashboard",
-    href: "/",
-    icon: LayoutDashboard,
-  },
-  {
-    label: "Users",
-    href: "/users",
-    icon: Users,
-  },
-  {
-    label: "Attendance",
-    href: "/attendance",
-    icon: CalendarCheck,
-  },
+  { label: "Dashboard", href: "/", icon: LayoutDashboard },
+  { label: "Users", href: "/users", icon: Users },
+  { label: "Attendance", href: "/attendance", icon: CalendarCheck },
 ];
 
 const profileNavItem: NavItem = {
@@ -49,6 +45,16 @@ export function AppSidebar({
   variant = "desktop",
 }: AppSidebarProps) {
   const pathname = usePathname();
+
+  // ✅ FIX: add state
+  const [cachedAuth, setCachedAuth] = useState<any>(null);
+
+  // ✅ FIX: load cache after mount
+  useEffect(() => {
+    const data = getCachedAuth();
+    setCachedAuth(data);
+  }, []);
+
   const mobileNavItems = [...navItems, profileNavItem];
 
   if (variant === "mobile") {
@@ -69,11 +75,11 @@ export function AppSidebar({
               }`}
             >
               <span
-                className={`grid size-5 shrink-0 place-items-center ${
+                className={`grid size-5 place-items-center ${
                   isActive ? "text-primary-foreground" : "text-brand-sky"
                 }`}
               >
-                <Icon aria-hidden="true" className="size-5" />
+                <Icon className="size-5" />
               </span>
               <span className="truncate">{item.label}</span>
             </Link>
@@ -89,21 +95,30 @@ export function AppSidebar({
         isExpanded ? "w-60" : "w-16"
       }`}
     >
+      {/* HEADER */}
       <div
         className={`flex h-16 items-center border-b border-border ${
           isExpanded ? "gap-3 px-4" : "justify-center px-0"
         }`}
       >
-        <div className="grid size-10 shrink-0 place-items-center rounded-lg bg-primary text-primary-foreground shadow-sm">
-          <span className="text-base font-bold">N</span>
+        <div className="relative size-10 shrink-0 overflow-hidden rounded-lg shadow-sm">
+          <Image
+            src="/logo.jpg"
+            alt="Logo"
+            fill
+            className="object-cover"
+            priority
+          />
         </div>
+
         <div
           className={`min-w-0 transition-opacity duration-200 ${
             isExpanded ? "opacity-100" : "pointer-events-none w-0 opacity-0"
           }`}
         >
+          {/* ✅ SAFE ACCESS */}
           <p className="truncate text-sm font-bold text-foreground">
-            NIELIT Admin
+            {cachedAuth?.user?.organization?.name || "NIELIT Admin"}
           </p>
           <p className="truncate text-xs text-muted-foreground">
             Attendance Console
@@ -111,8 +126,11 @@ export function AppSidebar({
         </div>
       </div>
 
+      {/* NAV */}
       <nav
-        className={`flex flex-1 flex-col gap-2 py-5 ${isExpanded ? "px-3" : "px-2"}`}
+        className={`flex flex-1 flex-col gap-2 py-5 ${
+          isExpanded ? "px-3" : "px-2"
+        }`}
       >
         {navItems.map((item) => {
           const Icon = item.icon;
@@ -127,17 +145,20 @@ export function AppSidebar({
                 isActive
                   ? "bg-primary text-primary-foreground shadow-sm"
                   : "text-muted-foreground hover:bg-secondary hover:text-secondary-foreground"
-              } ${isExpanded ? "justify-start gap-3 px-3" : "justify-center px-0"}`}
+              } ${
+                isExpanded ? "justify-start gap-3 px-3" : "justify-center px-0"
+              }`}
             >
               <span
-                className={`grid size-6 shrink-0 place-items-center ${
+                className={`grid size-6 place-items-center ${
                   isActive
                     ? "text-primary-foreground"
                     : "text-brand-sky group-hover:text-primary"
                 }`}
               >
-                <Icon aria-hidden="true" className="size-5" />
+                <Icon className="size-5" />
               </span>
+
               <span
                 className={`truncate transition-opacity duration-200 ${
                   isExpanded
@@ -151,42 +172,31 @@ export function AppSidebar({
           );
         })}
 
+        {/* PROFILE */}
         <div className="mt-auto border-t border-border pt-3">
-          {(() => {
-            const Icon = profileNavItem.icon;
-            const isActive = isNavItemActive(pathname, profileNavItem.href);
+          <Link
+            href={profileNavItem.href}
+            title={isExpanded ? undefined : profileNavItem.label}
+            className={`group flex h-12 items-center rounded-md text-sm font-semibold transition-colors ${
+              isNavItemActive(pathname, profileNavItem.href)
+                ? "bg-primary text-primary-foreground shadow-sm"
+                : "text-muted-foreground hover:bg-secondary hover:text-secondary-foreground"
+            } ${
+              isExpanded ? "justify-start gap-3 px-3" : "justify-center px-0"
+            }`}
+          >
+            <span className="grid size-6 place-items-center">
+              <UserCircle className="size-5" />
+            </span>
 
-            return (
-              <Link
-                href={profileNavItem.href}
-                title={isExpanded ? undefined : profileNavItem.label}
-                className={`group flex h-12 items-center rounded-md text-sm font-semibold transition-colors ${
-                  isActive
-                    ? "bg-primary text-primary-foreground shadow-sm"
-                    : "text-muted-foreground hover:bg-secondary hover:text-secondary-foreground"
-                } ${isExpanded ? "justify-start gap-3 px-3" : "justify-center px-0"}`}
-              >
-                <span
-                  className={`grid size-6 shrink-0 place-items-center ${
-                    isActive
-                      ? "text-primary-foreground"
-                      : "text-brand-sky group-hover:text-primary"
-                  }`}
-                >
-                  <Icon aria-hidden="true" className="size-5" />
-                </span>
-                <span
-                  className={`truncate transition-opacity duration-200 ${
-                    isExpanded
-                      ? "opacity-100"
-                      : "pointer-events-none w-0 opacity-0"
-                  }`}
-                >
-                  {profileNavItem.label}
-                </span>
-              </Link>
-            );
-          })()}
+            <span
+              className={`truncate transition-opacity duration-200 ${
+                isExpanded ? "opacity-100" : "pointer-events-none w-0 opacity-0"
+              }`}
+            >
+              Profile
+            </span>
+          </Link>
         </div>
       </nav>
     </aside>

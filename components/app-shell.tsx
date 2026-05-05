@@ -6,11 +6,22 @@ import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { ToastContainer } from "react-toastify";
 import { AppSidebar } from "./app-sidebar";
+import { getCachedAuth } from "@/lib/auth-cache";
 
 export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
   const pathname = usePathname();
+
+  const [cachedAuth, setCachedAuth] = useState<any>(null);
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(true);
 
+  // ✅ Load cache safely after mount
+  useEffect(() => {
+    const data = getCachedAuth();
+    console.log("Cached Auth:", data);
+    setCachedAuth(data);
+  }, []);
+
+  // ✅ Load sidebar state
   useEffect(() => {
     queueMicrotask(() => {
       setIsSidebarExpanded(
@@ -40,6 +51,7 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
 
   const SidebarIcon = isSidebarExpanded ? PanelLeftClose : PanelLeftOpen;
 
+  // ✅ Login page layout
   if (pathname === "/login") {
     return (
       <div className="min-h-dvh bg-background text-foreground">
@@ -61,7 +73,9 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
     <div className="min-h-dvh bg-background text-foreground">
       <div className="flex min-h-dvh">
         <AppSidebar isExpanded={isSidebarExpanded} />
+
         <div className="flex min-w-0 flex-1 flex-col">
+          {/* HEADER */}
           <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b border-border bg-background/90 px-1 backdrop-blur">
             <div className="flex items-center gap-3">
               <button
@@ -79,7 +93,10 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
               </button>
 
               <div className="min-w-0">
-                <p className="text-sm font-bold">NIELIT Admin</p>
+                {/* ✅ SAFE ACCESS */}
+                <p className="text-sm font-bold">
+                  {cachedAuth?.user?.organization?.name || "NIELIT Admin"}
+                </p>
                 <p className="text-xs text-muted-foreground">
                   Attendance Console
                 </p>
@@ -97,12 +114,18 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
               <Sun aria-hidden="true" className="theme-icon-sun size-5" />
             </button>
           </header>
+
+          {/* MOBILE SIDEBAR */}
           <AppSidebar isExpanded={isSidebarExpanded} variant="mobile" />
+
+          {/* MAIN */}
           <main className="flex-1 px-4 pb-24 pt-6 sm:px-6 md:pb-6 lg:px-8">
             {children}
           </main>
         </div>
       </div>
+
+      {/* TOAST */}
       <ToastContainer
         position="top-right"
         autoClose={3000}
