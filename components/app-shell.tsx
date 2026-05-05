@@ -11,7 +11,9 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
 
   useEffect(() => {
     queueMicrotask(() => {
-      setIsSidebarExpanded(window.localStorage.getItem("nielit-sidebar-expanded") !== "false");
+      setIsSidebarExpanded(
+        window.localStorage.getItem("nielit-sidebar-expanded") !== "false",
+      );
     });
   }, []);
 
@@ -24,7 +26,9 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
   }
 
   function toggleTheme() {
-    const nextTheme = document.documentElement.classList.contains("dark") ? "light" : "dark";
+    const nextTheme = document.documentElement.classList.contains("dark")
+      ? "light"
+      : "dark";
 
     document.documentElement.classList.toggle("dark", nextTheme === "dark");
     document.documentElement.classList.toggle("light", nextTheme === "light");
@@ -39,13 +43,17 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
       <div className="flex min-h-dvh">
         <AppSidebar isExpanded={isSidebarExpanded} />
         <div className="flex min-w-0 flex-1 flex-col">
-          <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b border-border bg-background/90 px-4 backdrop-blur sm:px-6 lg:px-8">
+          <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b border-border bg-background/90 px-1 backdrop-blur">
             <div className="flex items-center gap-3">
               <button
                 type="button"
                 onClick={toggleSidebar}
-                aria-label={isSidebarExpanded ? "Collapse sidebar" : "Expand sidebar"}
-                title={isSidebarExpanded ? "Collapse sidebar" : "Expand sidebar"}
+                aria-label={
+                  isSidebarExpanded ? "Collapse sidebar" : "Expand sidebar"
+                }
+                title={
+                  isSidebarExpanded ? "Collapse sidebar" : "Expand sidebar"
+                }
                 className="hidden size-10 place-items-center rounded-md border border-border bg-card text-foreground transition-colors hover:bg-secondary hover:text-secondary-foreground md:grid"
               >
                 <SidebarIcon aria-hidden="true" className="size-5" />
@@ -56,7 +64,9 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
               </div>
               <div className="min-w-0">
                 <p className="text-sm font-bold">NIELIT Admin</p>
-                <p className="text-xs text-muted-foreground">Attendance Console</p>
+                <p className="text-xs text-muted-foreground">
+                  Attendance Console
+                </p>
               </div>
             </div>
 
@@ -72,7 +82,9 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
             </button>
           </header>
           <AppSidebar isExpanded={isSidebarExpanded} variant="mobile" />
-          <main className="flex-1 px-4 pb-24 pt-6 sm:px-6 md:pb-6 lg:px-8">{children}</main>
+          <main className="flex-1 px-4 pb-24 pt-6 sm:px-6 md:pb-6 lg:px-8">
+            {children}
+          </main>
         </div>
       </div>
       <ToastContainer

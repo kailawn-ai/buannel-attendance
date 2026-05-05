@@ -13,7 +13,14 @@ import {
   type User,
 } from "@/lib/api";
 
-type UserForm = Required<UpdateUserPayload>;
+type UserForm = {
+  employee_id: string;
+  first_name: string;
+  last_name: string;
+  phone_no: string;
+  device_id: string;
+  profile_image: string;
+};
 
 const emptyForm: UserForm = {
   employee_id: "",
