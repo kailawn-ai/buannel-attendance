@@ -13,6 +13,32 @@ export type CachedAuth = {
   cachedAt: string;
 };
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function isCachedAuth(value: unknown): value is CachedAuth {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  const { user, remembered, cachedAt } = value;
+
+  if (!isRecord(user)) {
+    return false;
+  }
+
+  return (
+    typeof user.id === "number" &&
+    typeof user.employee_id === "string" &&
+    user.employee_id.trim().length > 0 &&
+    typeof user.organization_id === "number" &&
+    typeof remembered === "boolean" &&
+    typeof cachedAt === "string" &&
+    !Number.isNaN(Date.parse(cachedAt))
+  );
+}
+
 export function cacheOrganizationName(
   organizationId: number,
   organizationName: string,
@@ -77,8 +103,16 @@ export function getCachedAuth(): CachedAuth | null {
   }
 
   try {
-    return JSON.parse(cachedValue) as CachedAuth;
+    const parsedValue = JSON.parse(cachedValue);
+
+    if (!isCachedAuth(parsedValue)) {
+      clearCachedAuth();
+      return null;
+    }
+
+    return parsedValue;
   } catch {
+    clearCachedAuth();
     return null;
   }
 }

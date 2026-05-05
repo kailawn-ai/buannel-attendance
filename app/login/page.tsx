@@ -54,7 +54,6 @@ export default function LoginPage() {
       });
 
       cacheLoginResponse(response.data, rememberSession);
-      console.log("Login successful:", response.data);
 
       toast.success(response.message ?? "Login successful");
       router.push("/");

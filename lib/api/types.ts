@@ -64,6 +64,7 @@ export type LoginUser = {
   phone_no: string | null;
   isAdmin: boolean;
   organization_id: number;
+  organization?: Organization | null;
 };
 
 export type AttendanceStatus = "present" | "absent" | "late" | "half_day";

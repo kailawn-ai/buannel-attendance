@@ -9,8 +9,7 @@ import {
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { LucideIcon } from "lucide-react";
-import { useEffect, useState } from "react";
-import { getCachedAuth } from "@/lib/auth-cache";
+import type { CachedAuth } from "@/lib/auth-cache";
 import Image from "next/image";
 
 type NavItem = {
@@ -33,6 +32,7 @@ const profileNavItem: NavItem = {
 
 type AppSidebarProps = {
   isExpanded: boolean;
+  cachedAuth: CachedAuth | null;
   variant?: "desktop" | "mobile";
 };
 
@@ -42,18 +42,10 @@ function isNavItemActive(pathname: string, href: string) {
 
 export function AppSidebar({
   isExpanded,
+  cachedAuth,
   variant = "desktop",
 }: AppSidebarProps) {
   const pathname = usePathname();
-
-  // ✅ FIX: add state
-  const [cachedAuth, setCachedAuth] = useState<any>(null);
-
-  // ✅ FIX: load cache after mount
-  useEffect(() => {
-    const data = getCachedAuth();
-    setCachedAuth(data);
-  }, []);
 
   const mobileNavItems = [...navItems, profileNavItem];
 
@@ -95,7 +87,6 @@ export function AppSidebar({
         isExpanded ? "w-60" : "w-16"
       }`}
     >
-      {/* HEADER */}
       <div
         className={`flex h-16 items-center border-b border-border ${
           isExpanded ? "gap-3 px-4" : "justify-center px-0"
@@ -116,7 +107,6 @@ export function AppSidebar({
             isExpanded ? "opacity-100" : "pointer-events-none w-0 opacity-0"
           }`}
         >
-          {/* ✅ SAFE ACCESS */}
           <p className="truncate text-sm font-bold text-foreground">
             {cachedAuth?.user?.organization?.name || "NIELIT Admin"}
           </p>
@@ -126,7 +116,6 @@ export function AppSidebar({
         </div>
       </div>
 
-      {/* NAV */}
       <nav
         className={`flex flex-1 flex-col gap-2 py-5 ${
           isExpanded ? "px-3" : "px-2"
@@ -172,7 +161,6 @@ export function AppSidebar({
           );
         })}
 
-        {/* PROFILE */}
         <div className="mt-auto border-t border-border pt-3">
           <Link
             href={profileNavItem.href}
