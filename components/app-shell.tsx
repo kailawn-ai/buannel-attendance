@@ -1,12 +1,14 @@
 "use client";
 
 import { Moon, PanelLeftClose, PanelLeftOpen, Sun } from "lucide-react";
+import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { ToastContainer } from "react-toastify";
 import { AppSidebar } from "./app-sidebar";
 
 export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
+  const pathname = usePathname();
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(true);
 
   useEffect(() => {
@@ -38,6 +40,23 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
 
   const SidebarIcon = isSidebarExpanded ? PanelLeftClose : PanelLeftOpen;
 
+  if (pathname === "/login") {
+    return (
+      <div className="min-h-dvh bg-background text-foreground">
+        {children}
+        <ToastContainer
+          position="top-right"
+          autoClose={3000}
+          closeOnClick
+          draggable
+          newestOnTop
+          pauseOnFocusLoss
+          pauseOnHover
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-dvh bg-background text-foreground">
       <div className="flex min-h-dvh">
@@ -59,9 +78,6 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
                 <SidebarIcon aria-hidden="true" className="size-5" />
               </button>
 
-              <div className="grid size-10 place-items-center rounded-lg bg-primary text-sm font-bold text-primary-foreground md:hidden">
-                N
-              </div>
               <div className="min-w-0">
                 <p className="text-sm font-bold">NIELIT Admin</p>
                 <p className="text-xs text-muted-foreground">

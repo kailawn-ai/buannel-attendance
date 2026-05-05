@@ -40,6 +40,10 @@ function getUserName(record: Attendance) {
   return record.user?.name || [record.user?.first_name, record.user?.last_name].filter(Boolean).join(" ");
 }
 
+function getOrganizationName(record: Attendance) {
+  return record.user?.organization?.name ?? null;
+}
+
 function getErrorMessage(caughtError: unknown) {
   return caughtError instanceof LaravelApiError
     ? caughtError.message
@@ -184,6 +188,7 @@ export default function AttendancePage() {
       const values = [
         getUserName(record),
         record.user?.employee_id,
+        getOrganizationName(record),
         record.attendance_date,
         record.status,
         record.check_in,
@@ -332,7 +337,7 @@ export default function AttendancePage() {
                 type="search"
                 value={searchTerm}
                 onChange={(event) => setSearchTerm(event.target.value)}
-                placeholder="Search employee, date, status, check-in, check-out"
+                placeholder="Search employee, organization, date, status, check-in, check-out"
                 className="h-11 w-full rounded-md border border-input bg-background pl-10 pr-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/25"
               />
             </label>
@@ -496,7 +501,9 @@ export default function AttendancePage() {
                               {getUserName(record) || "Unknown User"}
                             </p>
                             <p className="truncate text-xs text-muted-foreground">
-                              {record.user?.employee_id ?? `User #${record.user_id}`}
+                              {[record.user?.employee_id ?? `User #${record.user_id}`, getOrganizationName(record)]
+                                .filter(Boolean)
+                                .join(" - ")}
                             </p>
                           </div>
                         </div>

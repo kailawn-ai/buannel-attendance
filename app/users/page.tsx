@@ -9,6 +9,10 @@ function getUserName(user: User) {
   return user.name || [user.first_name, user.last_name].filter(Boolean).join(" ");
 }
 
+function getOrganizationName(user: User) {
+  return user.organization?.name ?? `Organization #${user.organization_id}`;
+}
+
 function formatDate(value: string) {
   return new Intl.DateTimeFormat("en-IN", {
     day: "2-digit",
@@ -117,6 +121,7 @@ export default function UsersPage() {
         getUserName(user),
         user.phone_no,
         user.device_id,
+        getOrganizationName(user),
       ]
         .filter((value): value is string => Boolean(value));
 
@@ -132,7 +137,8 @@ export default function UsersPage() {
             <p className="text-sm font-semibold text-brand-sky">Users</p>
             <h1 className="mt-2 text-3xl font-bold text-foreground">Employee Directory</h1>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
-              Search and review registered employees, devices, contact details, and profile images.
+              Search and review registered employees, organizations, devices, contact details, and profile
+              images.
             </p>
           </div>
 
@@ -154,7 +160,7 @@ export default function UsersPage() {
               type="search"
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
-              placeholder="Search name, employee ID, phone, device"
+              placeholder="Search name, employee ID, organization, phone, device"
               className="h-11 w-full rounded-md border border-input bg-background pl-10 pr-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/25"
             />
           </label>
@@ -183,11 +189,12 @@ export default function UsersPage() {
           </div>
         ) : (
           <div className="themed-scrollbar overflow-x-auto">
-            <table className="w-full min-w-[880px] border-collapse text-left">
+            <table className="w-full min-w-[980px] border-collapse text-left">
               <thead className="bg-muted text-xs uppercase text-muted-foreground">
                 <tr>
                   <th className="px-4 py-3 font-semibold">Employee</th>
                   <th className="px-4 py-3 font-semibold">Employee ID</th>
+                  <th className="px-4 py-3 font-semibold">Organization</th>
                   <th className="px-4 py-3 font-semibold">Phone</th>
                   <th className="px-4 py-3 font-semibold">Device</th>
                   <th className="px-4 py-3 font-semibold">Joined</th>
@@ -203,6 +210,9 @@ export default function UsersPage() {
                       </td>
                       <td className="px-4 py-4">
                         <div className="h-4 w-24 animate-pulse rounded bg-muted" />
+                      </td>
+                      <td className="px-4 py-4">
+                        <div className="h-4 w-32 animate-pulse rounded bg-muted" />
                       </td>
                       <td className="px-4 py-4">
                         <div className="h-4 w-28 animate-pulse rounded bg-muted" />
@@ -239,6 +249,12 @@ export default function UsersPage() {
                       <td className="px-4 py-4 text-sm font-medium text-foreground">
                         {user.employee_id}
                       </td>
+                      <td className="px-4 py-4">
+                        <p className="text-sm font-medium text-foreground">{getOrganizationName(user)}</p>
+                        <p className="mt-1 text-xs capitalize text-muted-foreground">
+                          {user.organization?.type ?? "organization"}
+                        </p>
+                      </td>
                       <td className="px-4 py-4 text-sm text-muted-foreground">
                         {user.phone_no || "-"}
                       </td>
@@ -272,7 +288,7 @@ export default function UsersPage() {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={6} className="px-4 py-12 text-center">
+                    <td colSpan={7} className="px-4 py-12 text-center">
                       <p className="text-sm font-semibold text-foreground">No users found</p>
                       <p className="mt-1 text-sm text-muted-foreground">
                         Try a different search term or refresh the list.

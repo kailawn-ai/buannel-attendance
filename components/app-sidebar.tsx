@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarCheck, LayoutDashboard, Users } from "lucide-react";
+import { CalendarCheck, LayoutDashboard, UserCircle, Users } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { LucideIcon } from "lucide-react";
@@ -29,26 +29,34 @@ const navItems: NavItem[] = [
   },
 ];
 
+const profileNavItem: NavItem = {
+  label: "Profile",
+  href: "/profile",
+  icon: UserCircle,
+};
+
 type AppSidebarProps = {
   isExpanded: boolean;
   variant?: "desktop" | "mobile";
 };
+
+function isNavItemActive(pathname: string, href: string) {
+  return href === "/" ? pathname === href : pathname.startsWith(href);
+}
 
 export function AppSidebar({
   isExpanded,
   variant = "desktop",
 }: AppSidebarProps) {
   const pathname = usePathname();
+  const mobileNavItems = [...navItems, profileNavItem];
 
   if (variant === "mobile") {
     return (
-      <nav className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-3 gap-1 border-t border-border bg-card p-1 shadow-soft md:hidden">
-        {navItems.map((item) => {
+      <nav className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-4 gap-1 border-t border-border bg-card p-1 shadow-soft md:hidden">
+        {mobileNavItems.map((item) => {
           const Icon = item.icon;
-          const isActive =
-            item.href === "/"
-              ? pathname === item.href
-              : pathname.startsWith(item.href);
+          const isActive = isNavItemActive(pathname, item.href);
 
           return (
             <Link
@@ -108,10 +116,7 @@ export function AppSidebar({
       >
         {navItems.map((item) => {
           const Icon = item.icon;
-          const isActive =
-            item.href === "/"
-              ? pathname === item.href
-              : pathname.startsWith(item.href);
+          const isActive = isNavItemActive(pathname, item.href);
 
           return (
             <Link
@@ -145,6 +150,44 @@ export function AppSidebar({
             </Link>
           );
         })}
+
+        <div className="mt-auto border-t border-border pt-3">
+          {(() => {
+            const Icon = profileNavItem.icon;
+            const isActive = isNavItemActive(pathname, profileNavItem.href);
+
+            return (
+              <Link
+                href={profileNavItem.href}
+                title={isExpanded ? undefined : profileNavItem.label}
+                className={`group flex h-12 items-center rounded-md text-sm font-semibold transition-colors ${
+                  isActive
+                    ? "bg-primary text-primary-foreground shadow-sm"
+                    : "text-muted-foreground hover:bg-secondary hover:text-secondary-foreground"
+                } ${isExpanded ? "justify-start gap-3 px-3" : "justify-center px-0"}`}
+              >
+                <span
+                  className={`grid size-6 shrink-0 place-items-center ${
+                    isActive
+                      ? "text-primary-foreground"
+                      : "text-brand-sky group-hover:text-primary"
+                  }`}
+                >
+                  <Icon aria-hidden="true" className="size-5" />
+                </span>
+                <span
+                  className={`truncate transition-opacity duration-200 ${
+                    isExpanded
+                      ? "opacity-100"
+                      : "pointer-events-none w-0 opacity-0"
+                  }`}
+                >
+                  {profileNavItem.label}
+                </span>
+              </Link>
+            );
+          })()}
+        </div>
       </nav>
     </aside>
   );

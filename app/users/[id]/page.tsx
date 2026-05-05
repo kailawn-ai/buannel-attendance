@@ -9,6 +9,7 @@ import { toast } from "react-toastify";
 import {
   attendanceApi,
   LaravelApiError,
+  type Organization,
   type UpdateUserPayload,
   type User,
 } from "@/lib/api";
@@ -20,6 +21,7 @@ type UserForm = {
   phone_no: string;
   device_id: string;
   profile_image: string;
+  organization_id: string;
 };
 
 const emptyForm: UserForm = {
@@ -29,6 +31,7 @@ const emptyForm: UserForm = {
   phone_no: "",
   device_id: "",
   profile_image: "",
+  organization_id: "",
 };
 
 function getUserName(user: User) {
@@ -49,6 +52,7 @@ function toForm(user: User): UserForm {
     phone_no: user.phone_no ?? "",
     device_id: user.device_id ?? "",
     profile_image: user.profile_image ?? "",
+    organization_id: String(user.organization_id),
   };
 }
 
@@ -60,6 +64,7 @@ function toPayload(form: UserForm): UpdateUserPayload {
     phone_no: form.phone_no.trim() || null,
     device_id: form.device_id.trim() || null,
     profile_image: form.profile_image.trim() || null,
+    organization_id: Number(form.organization_id),
   };
 }
 
@@ -67,6 +72,7 @@ export default function UpdateUserPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
+  const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [form, setForm] = useState<UserForm>(emptyForm);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -75,15 +81,15 @@ export default function UpdateUserPage() {
   useEffect(() => {
     let isMounted = true;
 
-    attendanceApi.users
-      .show(params.id)
-      .then((response) => {
+    Promise.all([attendanceApi.users.show(params.id), attendanceApi.organizations.list()])
+      .then(([userResponse, organizationsResponse]) => {
         if (!isMounted) {
           return;
         }
 
-        setUser(response.data);
-        setForm(toForm(response.data));
+        setUser(userResponse.data);
+        setOrganizations(organizationsResponse.data);
+        setForm(toForm(userResponse.data));
         setError(null);
       })
       .catch((caughtError: unknown) => {
@@ -234,6 +240,25 @@ export default function UpdateUserPage() {
                   onChange={(event) => updateField("profile_image", event.target.value)}
                   className="h-11 rounded-md border border-input bg-background px-3 text-sm text-foreground outline-none transition-colors focus:border-ring focus:ring-2 focus:ring-ring/25"
                 />
+              </label>
+
+              <label className="flex flex-col gap-2">
+                <span className="text-sm font-semibold text-foreground">Organization</span>
+                <select
+                  value={form.organization_id}
+                  onChange={(event) => updateField("organization_id", event.target.value)}
+                  required
+                  className="h-11 rounded-md border border-input bg-background px-3 text-sm text-foreground outline-none transition-colors focus:border-ring focus:ring-2 focus:ring-ring/25"
+                >
+                  <option value="" disabled>
+                    Select organization
+                  </option>
+                  {organizations.map((organization) => (
+                    <option key={organization.id} value={organization.id}>
+                      {organization.name} ({organization.type})
+                    </option>
+                  ))}
+                </select>
               </label>
             </div>
 

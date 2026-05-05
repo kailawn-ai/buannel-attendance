@@ -25,10 +25,45 @@ export type User = {
   phone_no: string | null;
   device_id: string | null;
   profile_image: string | null;
+  organization_id: number;
+  organization?: Organization | null;
   name: string;
   created_at: string;
   updated_at: string;
   attendances?: Attendance[];
+};
+
+export type OrganizationType = "company" | "university" | "school" | "organization";
+
+export type Organization = {
+  id: number;
+  name: string;
+  type: OrganizationType;
+  users_count?: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type OrganizationPayload = {
+  name: string;
+  type: OrganizationType;
+};
+
+export type UpdateOrganizationPayload = Partial<OrganizationPayload>;
+
+export type LoginPayload = {
+  phone_no: string;
+  password: string;
+};
+
+export type LoginUser = {
+  id: number;
+  employee_id: string;
+  first_name: string;
+  last_name: string | null;
+  phone_no: string | null;
+  isAdmin: boolean;
+  organization_id: number;
 };
 
 export type AttendanceStatus = "present" | "absent" | "late" | "half_day";
@@ -59,6 +94,7 @@ export type UserPayload = {
   phone_no?: string | null;
   device_id?: string | null;
   profile_image?: string | null;
+  organization_id: number;
 };
 
 export type UpdateUserPayload = Partial<UserPayload>;
@@ -69,6 +105,8 @@ export type MarkAttendancePayload = {
 
 export type AttendanceQuery = {
   month?: string;
+  viewer_employee_id?: string;
+  admin_employee_id?: string;
 };
 
 export type UpdateAttendancePayload = {
