@@ -1,21 +1,13 @@
 "use client";
 
-import {
-  AlertCircle,
-  Building2,
-  Clock,
-  Loader2,
-  RefreshCw,
-  Save,
-  TimerReset,
-} from "lucide-react";
+import { AlertCircle, Clock, Loader2, Save } from "lucide-react";
 import type { FormEvent } from "react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "react-toastify";
+import { getCachedAuth, getCachedOrganizationName } from "@/lib/auth-cache";
 import {
   attendanceApi,
   LaravelApiError,
-  type Organization,
   type OrganizationTiming,
   type OrganizationTimingPayload,
 } from "@/lib/api";
@@ -93,17 +85,6 @@ function toPayload(form: TimingForm): OrganizationTimingPayload {
   };
 }
 
-function formatTime(value: string) {
-  const [hours = "00", minutes = "00"] = value.split(":");
-  const date = new Date();
-  date.setHours(Number(hours), Number(minutes), 0, 0);
-
-  return new Intl.DateTimeFormat("en-IN", {
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(date);
-}
-
 function timingOrderError(form: TimingForm) {
   if (form.check_in_start > form.late_after) {
     return "Late time must be after or equal to check-in start time.";
@@ -117,129 +98,50 @@ function timingOrderError(form: TimingForm) {
 }
 
 export default function OfficeTimingPage() {
-  const [organizations, setOrganizations] = useState<Organization[]>([]);
-  const [selectedOrganizationId, setSelectedOrganizationId] = useState("");
+  const [cachedAuth] = useState(() => getCachedAuth());
+  const organizationId = cachedAuth?.user.organization_id
+    ? String(cachedAuth.user.organization_id)
+    : "";
+  const organizationName =
+    cachedAuth?.user.organization?.name ??
+    (cachedAuth?.user.organization_id
+      ? getCachedOrganizationName(cachedAuth.user.organization_id)
+      : null) ??
+    (organizationId
+      ? `Organization #${organizationId}`
+      : "No organization cached");
+  const organizationType =
+    cachedAuth?.user.organization?.type ?? "organization";
   const [timing, setTiming] = useState<OrganizationTiming | null>(null);
   const [form, setForm] = useState<TimingForm>(defaultTimingForm);
   const [isLoading, setIsLoading] = useState(true);
   const [isTimingLoading, setIsTimingLoading] = useState(false);
-  const [isRefreshing, setIsRefreshing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const selectedOrganization = useMemo(
-    () =>
-      organizations.find(
-        (organization) => String(organization.id) === selectedOrganizationId,
-      ) ?? null,
-    [organizations, selectedOrganizationId],
-  );
-
   const validationError = useMemo(() => timingOrderError(form), [form]);
-
-  const loadTiming = useCallback(
-    async (organizationId: string, { silent = false } = {}) => {
-      if (!organizationId) {
-        return;
-      }
-
-      if (silent) {
-        setIsRefreshing(true);
-      } else {
-        setIsTimingLoading(true);
-      }
-
-      setError(null);
-
-      try {
-        const response = await attendanceApi.organizations.timing.show(organizationId);
-        setTiming(response.data);
-        setForm(toForm(response.data));
-      } catch (caughtError) {
-        const message = getErrorMessage(caughtError);
-        setError(message);
-        toast.error(message);
-      } finally {
-        setIsTimingLoading(false);
-        setIsRefreshing(false);
-      }
-    },
-    [],
-  );
-
-  const loadOrganizations = useCallback(async ({ silent = false } = {}) => {
-    if (silent) {
-      setIsRefreshing(true);
-    } else {
-      setIsLoading(true);
-    }
-
-    setError(null);
-
-    try {
-      const response = await attendanceApi.organizations.list();
-      const nextOrganizations = response.data;
-      const currentOrganizationStillExists = nextOrganizations.some(
-        (organization) => String(organization.id) === selectedOrganizationId,
-      );
-      const nextOrganizationId = currentOrganizationStillExists
-        ? selectedOrganizationId
-        : nextOrganizations[0]?.id
-          ? String(nextOrganizations[0].id)
-          : "";
-
-      setOrganizations(nextOrganizations);
-      setSelectedOrganizationId(nextOrganizationId);
-
-      if (nextOrganizationId) {
-        await loadTiming(nextOrganizationId, { silent });
-      } else {
-        setTiming(null);
-        setForm(defaultTimingForm);
-      }
-    } catch (caughtError) {
-      const message = getErrorMessage(caughtError);
-      setError(message);
-      toast.error(message);
-    } finally {
-      setIsLoading(false);
-      setIsRefreshing(false);
-    }
-  }, [loadTiming, selectedOrganizationId]);
 
   useEffect(() => {
     let isMounted = true;
 
-    attendanceApi.organizations
-      .list()
-      .then(async (response) => {
+    if (!organizationId) {
+      setError("No cached organization was found. Please log in again.");
+      setIsLoading(false);
+
+      return () => {
+        isMounted = false;
+      };
+    }
+
+    attendanceApi.organizations.timing
+      .show(organizationId)
+      .then((response) => {
         if (!isMounted) {
           return;
         }
 
-        const nextOrganizations = response.data;
-        const firstOrganizationId = nextOrganizations[0]?.id
-          ? String(nextOrganizations[0].id)
-          : "";
-
-        setOrganizations(nextOrganizations);
-        setSelectedOrganizationId(firstOrganizationId);
-
-        if (!firstOrganizationId) {
-          setTiming(null);
-          setForm(defaultTimingForm);
-          return;
-        }
-
-        const timingResponse =
-          await attendanceApi.organizations.timing.show(firstOrganizationId);
-
-        if (!isMounted) {
-          return;
-        }
-
-        setTiming(timingResponse.data);
-        setForm(toForm(timingResponse.data));
+        setTiming(response.data);
+        setForm(toForm(response.data));
         setError(null);
       })
       .catch((caughtError: unknown) => {
@@ -263,21 +165,16 @@ export default function OfficeTimingPage() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [organizationId]);
 
   function updateField(field: keyof TimingForm, value: string) {
     setForm((current) => ({ ...current, [field]: value }));
   }
 
-  function handleOrganizationChange(organizationId: string) {
-    setSelectedOrganizationId(organizationId);
-    void loadTiming(organizationId);
-  }
-
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (!selectedOrganizationId || validationError) {
+    if (!organizationId || validationError) {
       return;
     }
 
@@ -286,7 +183,7 @@ export default function OfficeTimingPage() {
 
     try {
       const response = await attendanceApi.organizations.timing.update(
-        selectedOrganizationId,
+        organizationId,
         toPayload(form),
       );
 
@@ -307,7 +204,9 @@ export default function OfficeTimingPage() {
       <section className="rounded-lg border border-border bg-card p-6 shadow-soft">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <p className="text-sm font-semibold text-brand-sky">Office Timing</p>
+            <p className="text-sm font-semibold text-brand-sky">
+              Office Timing
+            </p>
             <h1 className="mt-2 text-3xl font-bold text-foreground">
               Timing Management
             </h1>
@@ -316,69 +215,16 @@ export default function OfficeTimingPage() {
               used by the attendance API.
             </p>
           </div>
-
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            {timingFields.map((field) => (
-              <div
-                key={field.key}
-                className="rounded-md border border-border bg-secondary px-3 py-2"
-              >
-                <p className="text-xs text-muted-foreground">{field.label}</p>
-                <p className="text-lg font-bold text-foreground">
-                  {form[field.key] ? formatTime(form[field.key]) : "-"}
-                </p>
-              </div>
-            ))}
-          </div>
         </div>
       </section>
 
       <section className="rounded-lg border border-border bg-card shadow-sm">
-        <div className="flex flex-col gap-3 border-b border-border p-4 md:flex-row md:items-center md:justify-between">
-          <label className="flex w-full flex-col gap-2 md:max-w-md">
-            <span className="text-sm font-semibold text-foreground">
-              Organization
-            </span>
-            <div className="relative">
-              <Building2
-                aria-hidden="true"
-                className="pointer-events-none absolute left-3 top-1/2 size-5 -translate-y-1/2 text-muted-foreground"
-              />
-              <select
-                value={selectedOrganizationId}
-                onChange={(event) => handleOrganizationChange(event.target.value)}
-                disabled={isLoading || organizations.length === 0}
-                className="h-11 w-full rounded-md border border-input bg-background pl-10 pr-3 text-sm text-foreground outline-none transition-colors focus:border-ring focus:ring-2 focus:ring-ring/25 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {organizations.length === 0 ? (
-                  <option value="">No organizations found</option>
-                ) : null}
-                {organizations.map((organization) => (
-                  <option key={organization.id} value={organization.id}>
-                    {organization.name} ({organization.type})
-                  </option>
-                ))}
-              </select>
-            </div>
-          </label>
-
-          <button
-            type="button"
-            onClick={() => void loadOrganizations({ silent: true })}
-            disabled={isLoading || isRefreshing}
-            className="inline-flex h-11 items-center justify-center gap-2 rounded-md border border-border bg-background px-4 text-sm font-semibold text-foreground transition-colors hover:bg-secondary hover:text-secondary-foreground disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            <RefreshCw
-              aria-hidden="true"
-              className={`size-4 ${isRefreshing ? "animate-spin" : ""}`}
-            />
-            Refresh
-          </button>
-        </div>
-
         {error ? (
           <div className="flex items-start gap-3 border-b border-border p-6 text-destructive">
-            <AlertCircle aria-hidden="true" className="mt-0.5 size-5 shrink-0" />
+            <AlertCircle
+              aria-hidden="true"
+              className="mt-0.5 size-5 shrink-0"
+            />
             <div>
               <p className="text-sm font-semibold">Could not load timing</p>
               <p className="mt-1 text-sm text-muted-foreground">{error}</p>
@@ -389,7 +235,10 @@ export default function OfficeTimingPage() {
         {isLoading || isTimingLoading ? (
           <div className="grid gap-4 p-6 md:grid-cols-2">
             {Array.from({ length: 4 }).map((_, index) => (
-              <div key={index} className="h-24 animate-pulse rounded-md bg-muted" />
+              <div
+                key={index}
+                className="h-24 animate-pulse rounded-md bg-muted"
+              />
             ))}
           </div>
         ) : (
@@ -401,17 +250,12 @@ export default function OfficeTimingPage() {
                 </div>
                 <div>
                   <h2 className="text-base font-bold text-foreground">
-                    {selectedOrganization?.name ?? "Select an organization"}
+                    {organizationName}
                   </h2>
                   <p className="mt-1 text-sm capitalize text-muted-foreground">
-                    {selectedOrganization?.type ?? "organization"} timing profile
+                    {organizationType} timing profile
                   </p>
                 </div>
-              </div>
-
-              <div className="flex items-center gap-2 text-sm font-semibold text-muted-foreground">
-                <TimerReset aria-hidden="true" className="size-4 text-brand-pink" />
-                {timing?.updated_at ? `Updated ${formatTime(timing.updated_at.slice(11, 16))}` : "Default schedule"}
               </div>
             </div>
 
@@ -428,9 +272,11 @@ export default function OfficeTimingPage() {
                     type="time"
                     step="60"
                     value={form[field.key]}
-                    onChange={(event) => updateField(field.key, event.target.value)}
+                    onChange={(event) =>
+                      updateField(field.key, event.target.value)
+                    }
                     required
-                    className="h-11 rounded-md border border-input bg-card px-3 text-sm text-foreground outline-none transition-colors focus:border-ring focus:ring-2 focus:ring-ring/25"
+                    className="h-11 rounded-md border border-input bg-card px-3 text-sm text-foreground outline-none transition-colors focus:border-ring focus:ring-2 focus:ring-ring/25 [&::-webkit-calendar-picker-indicator]:size-6 [&::-webkit-calendar-picker-indicator]:cursor-pointer"
                   />
                   <span className="text-xs leading-5 text-muted-foreground">
                     {field.caption}
@@ -441,30 +287,19 @@ export default function OfficeTimingPage() {
 
             {validationError ? (
               <div className="flex items-start gap-3 rounded-md border border-destructive/30 bg-destructive/10 p-4 text-destructive">
-                <AlertCircle aria-hidden="true" className="mt-0.5 size-5 shrink-0" />
+                <AlertCircle
+                  aria-hidden="true"
+                  className="mt-0.5 size-5 shrink-0"
+                />
                 <p className="text-sm font-semibold">{validationError}</p>
               </div>
             ) : null}
 
             <div className="flex flex-col-reverse gap-3 border-t border-border pt-5 sm:flex-row sm:justify-end">
               <button
-                type="button"
-                onClick={() => {
-                  const nextForm = timing ? toForm(timing) : defaultTimingForm;
-                  setForm(nextForm);
-                }}
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-md border border-border bg-background px-5 text-sm font-semibold text-foreground transition-colors hover:bg-secondary hover:text-secondary-foreground"
-              >
-                <TimerReset aria-hidden="true" className="size-4" />
-                Reset
-              </button>
-              <button
                 type="submit"
                 disabled={
-                  isSaving ||
-                  Boolean(validationError) ||
-                  !selectedOrganizationId ||
-                  organizations.length === 0
+                  isSaving || Boolean(validationError) || !organizationId
                 }
                 className="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-primary px-5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-brand-blue disabled:cursor-not-allowed disabled:opacity-60"
               >
