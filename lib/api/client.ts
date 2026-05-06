@@ -9,6 +9,8 @@ import type {
   MarkAttendancePayload,
   Organization,
   OrganizationPayload,
+  OrganizationTiming,
+  OrganizationTimingPayload,
   UpdateOrganizationPayload,
   UpdateAttendancePayload,
   UpdateUserPayload,
@@ -174,6 +176,15 @@ export const attendanceApi = {
       apiRequest<never>(`/attendance/organizations/${id}`, {
         method: "DELETE",
       }),
+    timing: {
+      show: (id: number | string) =>
+        apiRequest<OrganizationTiming>(`/attendance/organizations/${id}/timing`),
+      update: (id: number | string, payload: OrganizationTimingPayload) =>
+        apiRequest<OrganizationTiming>(`/attendance/organizations/${id}/timing`, {
+          method: "PATCH",
+          body: payload,
+        }),
+    },
   },
   attendance: {
     mark: (payload: MarkAttendancePayload) =>

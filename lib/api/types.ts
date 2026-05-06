@@ -39,9 +39,21 @@ export type Organization = {
   id: number;
   name: string;
   type: OrganizationType;
+  timing?: OrganizationTiming | null;
   users_count?: number;
   created_at: string;
   updated_at: string;
+};
+
+export type OrganizationTiming = {
+  id?: number;
+  organization_id: number;
+  check_in_start: string;
+  check_in_end: string;
+  late_after: string;
+  check_out_start: string;
+  created_at?: string;
+  updated_at?: string;
 };
 
 export type OrganizationPayload = {
@@ -50,6 +62,13 @@ export type OrganizationPayload = {
 };
 
 export type UpdateOrganizationPayload = Partial<OrganizationPayload>;
+
+export type OrganizationTimingPayload = Partial<
+  Pick<
+    OrganizationTiming,
+    "check_in_start" | "check_in_end" | "late_after" | "check_out_start"
+  >
+>;
 
 export type LoginPayload = {
   phone_no: string;
