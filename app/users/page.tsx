@@ -1,12 +1,22 @@
 "use client";
 
-import { AlertCircle, Pencil, RefreshCw, Search, Trash2, Users } from "lucide-react";
+import {
+  AlertCircle,
+  CalendarCheck,
+  Pencil,
+  RefreshCw,
+  Search,
+  Trash2,
+  Users,
+} from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { attendanceApi, LaravelApiError, type User } from "@/lib/api";
 
 function getUserName(user: User) {
-  return user.name || [user.first_name, user.last_name].filter(Boolean).join(" ");
+  return (
+    user.name || [user.first_name, user.last_name].filter(Boolean).join(" ")
+  );
 }
 
 function getOrganizationName(user: User) {
@@ -67,7 +77,9 @@ export default function UsersPage() {
 
     try {
       await attendanceApi.users.delete(user.id);
-      setUsers((currentUsers) => currentUsers.filter((currentUser) => currentUser.id !== user.id));
+      setUsers((currentUsers) =>
+        currentUsers.filter((currentUser) => currentUser.id !== user.id),
+      );
     } catch (caughtError) {
       setError(getErrorMessage(caughtError));
     } finally {
@@ -122,8 +134,7 @@ export default function UsersPage() {
         user.phone_no,
         user.device_id,
         getOrganizationName(user),
-      ]
-        .filter((value): value is string => Boolean(value));
+      ].filter((value): value is string => Boolean(value));
 
       return values.some((value) => value.toLowerCase().includes(query));
     });
@@ -135,10 +146,12 @@ export default function UsersPage() {
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="text-sm font-semibold text-brand-sky">Users</p>
-            <h1 className="mt-2 text-3xl font-bold text-foreground">Employee Directory</h1>
+            <h1 className="mt-2 text-3xl font-bold text-foreground">
+              Employee Directory
+            </h1>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
-              Search and review registered employees, organizations, devices, contact details, and profile
-              images.
+              Search and review registered employees, organizations, devices,
+              contact details, and profile images.
             </p>
           </div>
 
@@ -181,7 +194,10 @@ export default function UsersPage() {
 
         {error ? (
           <div className="flex items-start gap-3 p-6 text-destructive">
-            <AlertCircle aria-hidden="true" className="mt-0.5 size-5 shrink-0" />
+            <AlertCircle
+              aria-hidden="true"
+              className="mt-0.5 size-5 shrink-0"
+            />
             <div>
               <p className="text-sm font-semibold">Could not load users</p>
               <p className="mt-1 text-sm text-muted-foreground">{error}</p>
@@ -198,7 +214,9 @@ export default function UsersPage() {
                   <th className="px-4 py-3 font-semibold">Phone</th>
                   <th className="px-4 py-3 font-semibold">Device</th>
                   <th className="px-4 py-3 font-semibold">Joined</th>
-                  <th className="px-4 py-3 text-right font-semibold">Actions</th>
+                  <th className="px-4 py-3 text-right font-semibold">
+                    Actions
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -230,18 +248,20 @@ export default function UsersPage() {
                   ))
                 ) : filteredUsers.length > 0 ? (
                   filteredUsers.map((user) => (
-                    <tr key={user.id} className="transition-colors hover:bg-secondary/60">
+                    <tr
+                      key={user.id}
+                      className="transition-colors hover:bg-secondary/60"
+                    >
                       <td className="px-4 py-4">
                         <div className="flex items-center gap-3">
-                          <div className="grid size-10 shrink-0 place-items-center rounded-md bg-primary text-sm font-bold text-primary-foreground">
-                            {getUserName(user).slice(0, 1).toUpperCase() || "U"}
-                          </div>
                           <div className="min-w-0">
                             <p className="truncate text-sm font-semibold text-foreground">
                               {getUserName(user)}
                             </p>
                             <p className="truncate text-xs text-muted-foreground">
-                              {user.profile_image ? "Profile image linked" : "No profile image"}
+                              {user.profile_image
+                                ? "Profile image linked"
+                                : "No profile image"}
                             </p>
                           </div>
                         </div>
@@ -250,7 +270,9 @@ export default function UsersPage() {
                         {user.employee_id}
                       </td>
                       <td className="px-4 py-4">
-                        <p className="text-sm font-medium text-foreground">{getOrganizationName(user)}</p>
+                        <p className="text-sm font-medium text-foreground">
+                          {getOrganizationName(user)}
+                        </p>
                         <p className="mt-1 text-xs capitalize text-muted-foreground">
                           {user.organization?.type ?? "organization"}
                         </p>
@@ -266,22 +288,47 @@ export default function UsersPage() {
                       </td>
                       <td className="px-4 py-4">
                         <div className="flex justify-end gap-2">
-                          <Link
-                            href={`/users/${user.id}`}
-                            aria-label={`Edit ${getUserName(user)}`}
-                            className="grid size-9 place-items-center rounded-md border border-border bg-background text-muted-foreground transition-colors hover:bg-secondary hover:text-secondary-foreground"
-                          >
-                            <Pencil aria-hidden="true" className="size-4" />
-                          </Link>
-                          <button
-                            type="button"
-                            onClick={() => void deleteUser(user)}
-                            disabled={deletingUserId === user.id}
-                            aria-label={`Delete ${getUserName(user)}`}
-                            className="grid size-9 place-items-center rounded-md border border-border bg-background text-destructive transition-colors hover:bg-destructive hover:text-destructive-foreground disabled:cursor-not-allowed disabled:opacity-60"
-                          >
-                            <Trash2 aria-hidden="true" className="size-4" />
-                          </button>
+                          <div className="group relative">
+                            <Link
+                              href={`/attendance?mode=user&employee_id=${encodeURIComponent(user.employee_id)}`}
+                              aria-label={`View attendance for ${getUserName(user)}`}
+                              className="grid size-9 place-items-center rounded-md border border-border bg-background text-brand-sky transition-colors hover:bg-brand-sky hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+                            >
+                              <CalendarCheck
+                                aria-hidden="true"
+                                className="size-4"
+                              />
+                            </Link>
+                            <span className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-2 -translate-x-1/2 rounded-md bg-foreground px-2 py-1 text-xs font-semibold text-background opacity-0 shadow-sm transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+                              Attendance
+                            </span>
+                          </div>
+                          <div className="group relative">
+                            <Link
+                              href={`/users/${user.id}`}
+                              aria-label={`Edit ${getUserName(user)}`}
+                              className="grid size-9 place-items-center rounded-md border border-border bg-background text-muted-foreground transition-colors hover:bg-secondary hover:text-secondary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+                            >
+                              <Pencil aria-hidden="true" className="size-4" />
+                            </Link>
+                            <span className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-2 -translate-x-1/2 rounded-md bg-foreground px-2 py-1 text-xs font-semibold text-background opacity-0 shadow-sm transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+                              Edit
+                            </span>
+                          </div>
+                          <div className="group relative">
+                            <button
+                              type="button"
+                              onClick={() => void deleteUser(user)}
+                              disabled={deletingUserId === user.id}
+                              aria-label={`Delete ${getUserName(user)}`}
+                              className="grid size-9 place-items-center rounded-md border border-border bg-background text-destructive transition-colors hover:bg-destructive hover:text-destructive-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              <Trash2 aria-hidden="true" className="size-4" />
+                            </button>
+                            <span className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-2 -translate-x-1/2 rounded-md bg-foreground px-2 py-1 text-xs font-semibold text-background opacity-0 shadow-sm transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+                              Delete
+                            </span>
+                          </div>
                         </div>
                       </td>
                     </tr>
@@ -289,7 +336,9 @@ export default function UsersPage() {
                 ) : (
                   <tr>
                     <td colSpan={7} className="px-4 py-12 text-center">
-                      <p className="text-sm font-semibold text-foreground">No users found</p>
+                      <p className="text-sm font-semibold text-foreground">
+                        No users found
+                      </p>
                       <p className="mt-1 text-sm text-muted-foreground">
                         Try a different search term or refresh the list.
                       </p>

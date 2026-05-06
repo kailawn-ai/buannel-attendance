@@ -91,6 +91,18 @@ function statusClassName(status: AttendanceStatus) {
   }
 }
 
+async function loadAttendanceRecords(mode: AttendanceMode, employeeId: string, month: string) {
+  if (mode === "all") {
+    return attendanceApi.attendance.admin();
+  }
+
+  if (mode === "month") {
+    return attendanceApi.attendance.admin({ month });
+  }
+
+  return attendanceApi.attendance.byUser(employeeId.trim(), { month });
+}
+
 export default function AttendancePage() {
   const [mode, setMode] = useState<AttendanceMode>("all");
   const [month, setMonth] = useState(getCurrentMonth);
@@ -122,12 +134,7 @@ export default function AttendancePage() {
       setError(null);
 
       try {
-        const response =
-          mode === "all"
-            ? await attendanceApi.attendance.admin()
-            : mode === "month"
-              ? await attendanceApi.attendance.admin({ month })
-              : await attendanceApi.attendance.byUser(employeeId.trim(), { month });
+        const response = await loadAttendanceRecords(mode, employeeId, month);
 
         setRecords(response.data);
       } catch (caughtError) {
@@ -145,8 +152,28 @@ export default function AttendancePage() {
   useEffect(() => {
     let isMounted = true;
 
-    attendanceApi.attendance
-      .admin()
+    const searchParams = new URLSearchParams(window.location.search);
+    const queryEmployeeId = searchParams.get("employee_id") ?? searchParams.get("employeeId") ?? "";
+    const queryMonth = searchParams.get("month") ?? getCurrentMonth();
+    const queryMode = searchParams.get("mode");
+    const initialMode: AttendanceMode =
+      queryMode === "user" || queryEmployeeId ? "user" : queryMode === "month" ? "month" : "all";
+
+    setMode(initialMode);
+    setEmployeeId(queryEmployeeId);
+    setMonth(queryMonth);
+
+    if (initialMode === "user" && !queryEmployeeId.trim()) {
+      setError("Enter an employee ID to load user attendance.");
+      setRecords([]);
+      setIsLoading(false);
+
+      return () => {
+        isMounted = false;
+      };
+    }
+
+    loadAttendanceRecords(initialMode, queryEmployeeId, queryMonth)
       .then((response) => {
         if (!isMounted) {
           return;
@@ -209,13 +236,17 @@ export default function AttendancePage() {
   }, [records]);
 
   function startEdit(record: Attendance) {
+    if (record.id === null) {
+      return;
+    }
+
     setEditingRecord(record);
     setEditForm(toForm(record));
     setError(null);
   }
 
   async function saveAttendance() {
-    if (!editingRecord || !editForm) {
+    if (!editingRecord || !editForm || editingRecord.id === null) {
       return;
     }
 
@@ -242,6 +273,10 @@ export default function AttendancePage() {
   }
 
   async function deleteAttendance(record: Attendance) {
+    if (record.id === null) {
+      return;
+    }
+
     const shouldDelete = window.confirm(`Delete attendance for ${getUserName(record) || "this user"}?`);
 
     if (!shouldDelete) {
@@ -490,7 +525,10 @@ export default function AttendancePage() {
                   ))
                 ) : filteredRecords.length > 0 ? (
                   filteredRecords.map((record) => (
-                    <tr key={record.id} className="transition-colors hover:bg-secondary/60">
+                    <tr
+                      key={record.id ?? `${record.user_id}-${record.attendance_date}`}
+                      className="transition-colors hover:bg-secondary/60"
+                    >
                       <td className="px-4 py-4">
                         <div className="flex items-center gap-3">
                           <div className="grid size-10 shrink-0 place-items-center rounded-md bg-primary text-primary-foreground">
@@ -528,23 +566,31 @@ export default function AttendancePage() {
                       </td>
                       <td className="px-4 py-4">
                         <div className="flex justify-end gap-2">
-                          <button
-                            type="button"
-                            onClick={() => startEdit(record)}
-                            aria-label="Edit attendance"
-                            className="grid size-9 place-items-center rounded-md border border-border bg-background text-muted-foreground transition-colors hover:bg-secondary hover:text-secondary-foreground"
-                          >
-                            <Pencil aria-hidden="true" className="size-4" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => void deleteAttendance(record)}
-                            disabled={deletingRecordId === record.id}
-                            aria-label="Delete attendance"
-                            className="grid size-9 place-items-center rounded-md border border-border bg-background text-destructive transition-colors hover:bg-destructive hover:text-destructive-foreground disabled:cursor-not-allowed disabled:opacity-60"
-                          >
-                            <Trash2 aria-hidden="true" className="size-4" />
-                          </button>
+                          {record.id === null ? (
+                            <span className="inline-flex h-9 items-center rounded-md border border-border bg-muted px-3 text-xs font-semibold text-muted-foreground">
+                              No record
+                            </span>
+                          ) : (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => startEdit(record)}
+                                aria-label="Edit attendance"
+                                className="grid size-9 place-items-center rounded-md border border-border bg-background text-muted-foreground transition-colors hover:bg-secondary hover:text-secondary-foreground"
+                              >
+                                <Pencil aria-hidden="true" className="size-4" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => void deleteAttendance(record)}
+                                disabled={deletingRecordId === record.id}
+                                aria-label="Delete attendance"
+                                className="grid size-9 place-items-center rounded-md border border-border bg-background text-destructive transition-colors hover:bg-destructive hover:text-destructive-foreground disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                <Trash2 aria-hidden="true" className="size-4" />
+                              </button>
+                            </>
+                          )}
                         </div>
                       </td>
                     </tr>

@@ -77,7 +77,7 @@ export type AttendanceAction =
   | "check_out_closed";
 
 export type Attendance = {
-  id: number;
+  id: number | null;
   user_id: number;
   attendance_date: string;
   check_in: string | null;

@@ -16,7 +16,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Buannel Studio - NIELIT Admin",
+  title: "Buannel Studio - Attendance Admin",
   description: "Attendance administration console",
 };
 
