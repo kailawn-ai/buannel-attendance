@@ -4,6 +4,7 @@ import {
   AlertCircle,
   CalendarCheck,
   Pencil,
+  Plus,
   RefreshCw,
   Save,
   Search,
@@ -16,7 +17,9 @@ import {
   attendanceApi,
   LaravelApiError,
   type Attendance,
+  type AttendanceSummary,
   type AttendanceStatus,
+  type CreateAttendancePayload,
   type UpdateAttendancePayload,
 } from "@/lib/api";
 
@@ -27,9 +30,10 @@ type AttendanceForm = {
   check_in: string;
   check_out: string;
   status: AttendanceStatus;
+  remark: string;
 };
 
-const statusOptions: AttendanceStatus[] = ["present", "absent", "late", "half_day"];
+const statusOptions: AttendanceStatus[] = ["present", "absent", "late", "half_day", "leave"];
 
 function getCurrentMonth() {
   const now = new Date();
@@ -56,6 +60,7 @@ function toForm(record: Attendance): AttendanceForm {
     check_in: record.check_in ?? "",
     check_out: record.check_out ?? "",
     status: record.status,
+    remark: record.remark ?? "",
   };
 }
 
@@ -65,7 +70,23 @@ function toPayload(form: AttendanceForm): UpdateAttendancePayload {
     check_in: form.check_in.trim() || null,
     check_out: form.check_out.trim() || null,
     status: form.status,
+    remark: form.remark.trim() || null,
   };
+}
+
+function toCreatePayload(record: Attendance, form: AttendanceForm): CreateAttendancePayload {
+  return {
+    user_id: record.user_id,
+    attendance_date: form.attendance_date,
+    check_in: form.check_in.trim() || null,
+    check_out: form.check_out.trim() || null,
+    status: form.status,
+    remark: form.remark.trim() || null,
+  };
+}
+
+function attendanceRecordKey(record: Attendance) {
+  return record.id === null ? `${record.user_id}-${record.attendance_date}` : String(record.id);
 }
 
 function formatDate(value: string) {
@@ -84,11 +105,65 @@ function statusClassName(status: AttendanceStatus) {
       return "bg-brand-pink/15 text-brand-pink";
     case "half_day":
       return "bg-accent/15 text-accent";
+    case "leave":
+      return "bg-brand-sky/15 text-brand-sky";
     case "absent":
       return "bg-destructive/15 text-destructive";
     default:
       return "bg-muted text-muted-foreground";
   }
+}
+
+function formatSalaryCut(record: Attendance) {
+  if (record.salary_cut === undefined || record.salary_cut === null) {
+    return "-";
+  }
+
+  const currency = record.user?.staffDetail?.salary_currency || "INR";
+
+  try {
+    return new Intl.NumberFormat("en-IN", {
+      style: "currency",
+      currency,
+      maximumFractionDigits: 2,
+    }).format(record.salary_cut);
+  } catch {
+    return `${currency} ${record.salary_cut.toFixed(2)}`;
+  }
+}
+
+function formatSummarySalaryCut(summary: AttendanceSummary | null, records: Attendance[]) {
+  if (!summary) {
+    return "-";
+  }
+
+  const currency = records.find((record) => record.user?.staffDetail?.salary_currency)?.user?.staffDetail?.salary_currency || "INR";
+
+  try {
+    return new Intl.NumberFormat("en-IN", {
+      style: "currency",
+      currency,
+      maximumFractionDigits: 2,
+    }).format(summary.total_salary_cut);
+  } catch {
+    return `${currency} ${summary.total_salary_cut.toFixed(2)}`;
+  }
+}
+
+function formatAnnualLeave(summary: AttendanceSummary) {
+  if (summary.annual_leave_limit <= 0) {
+    return `${summary.annual_leave_taken} / Unlimited`;
+  }
+
+  return `${summary.annual_leave_taken} / ${summary.annual_leave_limit}`;
+}
+
+function formatAnnualLeaveRemaining(summary: AttendanceSummary) {
+  if (summary.annual_leave_remaining === null) {
+    return "Unlimited";
+  }
+
+  return summary.annual_leave_remaining;
 }
 
 async function loadAttendanceRecords(mode: AttendanceMode, employeeId: string, month: string) {
@@ -109,11 +184,12 @@ export default function AttendancePage() {
   const [employeeId, setEmployeeId] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [records, setRecords] = useState<Attendance[]>([]);
+  const [attendanceSummary, setAttendanceSummary] = useState<AttendanceSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [editingRecord, setEditingRecord] = useState<Attendance | null>(null);
   const [editForm, setEditForm] = useState<AttendanceForm | null>(null);
-  const [savingRecordId, setSavingRecordId] = useState<number | null>(null);
+  const [savingRecordKey, setSavingRecordKey] = useState<string | null>(null);
   const [deletingRecordId, setDeletingRecordId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -122,6 +198,7 @@ export default function AttendancePage() {
       if (mode === "user" && !employeeId.trim()) {
         setError("Enter an employee ID to load user attendance.");
         setRecords([]);
+        setAttendanceSummary(null);
         return;
       }
 
@@ -137,6 +214,7 @@ export default function AttendancePage() {
         const response = await loadAttendanceRecords(mode, employeeId, month);
 
         setRecords(response.data);
+        setAttendanceSummary(mode === "user" ? response.summary ?? null : null);
       } catch (caughtError) {
         const message = getErrorMessage(caughtError);
         setError(message);
@@ -166,6 +244,7 @@ export default function AttendancePage() {
     if (initialMode === "user" && !queryEmployeeId.trim()) {
       setError("Enter an employee ID to load user attendance.");
       setRecords([]);
+      setAttendanceSummary(null);
       setIsLoading(false);
 
       return () => {
@@ -180,6 +259,7 @@ export default function AttendancePage() {
         }
 
         setRecords(response.data);
+        setAttendanceSummary(initialMode === "user" ? response.summary ?? null : null);
         setError(null);
       })
       .catch((caughtError: unknown) => {
@@ -220,6 +300,7 @@ export default function AttendancePage() {
         record.status,
         record.check_in,
         record.check_out,
+        record.remark,
       ].filter((value): value is string => Boolean(value));
 
       return values.some((value) => value.toLowerCase().includes(query));
@@ -232,43 +313,52 @@ export default function AttendancePage() {
       present: records.filter((record) => record.status === "present").length,
       late: records.filter((record) => record.status === "late").length,
       absent: records.filter((record) => record.status === "absent").length,
+      leave: records.filter((record) => record.status === "leave").length,
     };
   }, [records]);
 
   function startEdit(record: Attendance) {
-    if (record.id === null) {
-      return;
-    }
-
     setEditingRecord(record);
     setEditForm(toForm(record));
     setError(null);
   }
 
   async function saveAttendance() {
-    if (!editingRecord || !editForm || editingRecord.id === null) {
+    if (!editingRecord || !editForm) {
       return;
     }
 
-    setSavingRecordId(editingRecord.id);
+    const recordKey = attendanceRecordKey(editingRecord);
+
+    setSavingRecordKey(recordKey);
     setError(null);
 
     try {
-      const response = await attendanceApi.attendance.update(editingRecord.id, toPayload(editForm));
+      const response =
+        editingRecord.id === null
+          ? await attendanceApi.attendance.create(toCreatePayload(editingRecord, editForm))
+          : await attendanceApi.attendance.update(editingRecord.id, toPayload(editForm));
+
       setRecords((currentRecords) =>
         currentRecords.map((record) =>
-          record.id === editingRecord.id ? { ...response.data, user: response.data.user ?? record.user } : record,
+          attendanceRecordKey(record) === recordKey
+            ? { ...response.data, user: response.data.user ?? record.user }
+            : record,
         ),
       );
       setEditingRecord(null);
       setEditForm(null);
-      toast.success("Attendance updated successfully");
+      toast.success(
+        editingRecord.id === null
+          ? "Attendance created successfully"
+          : "Attendance updated successfully",
+      );
     } catch (caughtError) {
       const message = getErrorMessage(caughtError);
       setError(message);
       toast.error(message);
     } finally {
-      setSavingRecordId(null);
+      setSavingRecordKey(null);
     }
   }
 
@@ -288,7 +378,22 @@ export default function AttendancePage() {
 
     try {
       await attendanceApi.attendance.delete(record.id);
-      setRecords((currentRecords) => currentRecords.filter((currentRecord) => currentRecord.id !== record.id));
+      setRecords((currentRecords) =>
+        currentRecords
+          .map((currentRecord) =>
+            currentRecord.id === record.id && mode === "user"
+              ? {
+                  ...currentRecord,
+                  id: null,
+                  check_in: null,
+                  check_out: null,
+                  status: "absent" as const,
+                  remark: null,
+                }
+              : currentRecord,
+          )
+          .filter((currentRecord) => mode === "user" || currentRecord.id !== record.id),
+      );
 
       if (editingRecord?.id === record.id) {
         setEditingRecord(null);
@@ -318,7 +423,7 @@ export default function AttendancePage() {
             </p>
           </div>
 
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
             <div className="rounded-md border border-border bg-secondary px-3 py-2">
               <p className="text-xs text-muted-foreground">Total</p>
               <p className="text-lg font-bold text-foreground">{stats.total}</p>
@@ -334,6 +439,10 @@ export default function AttendancePage() {
             <div className="rounded-md border border-border bg-secondary px-3 py-2">
               <p className="text-xs text-muted-foreground">Absent</p>
               <p className="text-lg font-bold text-destructive">{stats.absent}</p>
+            </div>
+            <div className="rounded-md border border-border bg-secondary px-3 py-2">
+              <p className="text-xs text-muted-foreground">Leave</p>
+              <p className="text-lg font-bold text-brand-sky">{stats.leave}</p>
             </div>
           </div>
         </div>
@@ -412,12 +521,58 @@ export default function AttendancePage() {
           </div>
         </div>
 
+        {mode === "user" && attendanceSummary ? (
+          <div className="grid gap-3 border-b border-border p-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+            <div className="rounded-md border border-border bg-secondary px-4 py-3">
+              <p className="text-xs font-medium text-muted-foreground">Late Duration</p>
+              <p className="mt-2 text-lg font-bold text-foreground">
+                {attendanceSummary.total_late_duration}
+              </p>
+            </div>
+            <div className="rounded-md border border-border bg-secondary px-4 py-3">
+              <p className="text-xs font-medium text-muted-foreground">Late Minutes</p>
+              <p className="mt-2 text-lg font-bold text-brand-pink">
+                {attendanceSummary.total_late_minutes}
+              </p>
+            </div>
+            <div className="rounded-md border border-border bg-secondary px-4 py-3">
+              <p className="text-xs font-medium text-muted-foreground">Late Seconds</p>
+              <p className="mt-2 text-lg font-bold text-foreground">
+                {attendanceSummary.total_late_seconds}
+              </p>
+            </div>
+            <div className="rounded-md border border-border bg-secondary px-4 py-3">
+              <p className="text-xs font-medium text-muted-foreground">Salary Cut</p>
+              <p className="mt-2 text-lg font-bold text-destructive">
+                {formatSummarySalaryCut(attendanceSummary, records)}
+              </p>
+            </div>
+            <div className="rounded-md border border-border bg-secondary px-4 py-3">
+              <p className="text-xs font-medium text-muted-foreground">Leave Days</p>
+              <p className="mt-2 text-lg font-bold text-foreground">
+                {attendanceSummary.leave_days}
+              </p>
+            </div>
+            <div className="rounded-md border border-border bg-secondary px-4 py-3">
+              <p className="text-xs font-medium text-muted-foreground">Annual Leave</p>
+              <p className="mt-2 text-lg font-bold text-foreground">
+                {formatAnnualLeave(attendanceSummary)}
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Remaining {formatAnnualLeaveRemaining(attendanceSummary)}
+              </p>
+            </div>
+          </div>
+        ) : null}
+
         {editingRecord && editForm ? (
           <div className="border-b border-border p-4">
             <div className="flex flex-col gap-4 rounded-md border border-border bg-background p-4">
               <div className="flex items-center justify-between gap-4">
                 <div>
-                  <h2 className="text-base font-bold text-foreground">Edit Attendance</h2>
+                  <h2 className="text-base font-bold text-foreground">
+                    {editingRecord.id === null ? "Add Attendance" : "Edit Attendance"}
+                  </h2>
                   <p className="mt-1 text-sm text-muted-foreground">
                     {getUserName(editingRecord) || "Employee"} - {formatDate(editingRecord.attendance_date)}
                   </p>
@@ -480,13 +635,22 @@ export default function AttendancePage() {
                 <button
                   type="button"
                   onClick={() => void saveAttendance()}
-                  disabled={savingRecordId === editingRecord.id}
+                  disabled={savingRecordKey !== null}
                   className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-primary px-4 text-sm font-semibold text-primary-foreground transition-colors hover:bg-brand-blue disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <Save aria-hidden="true" className="size-4" />
-                  {savingRecordId === editingRecord.id ? "Saving" : "Save"}
+                  {savingRecordKey !== null ? "Saving" : "Save"}
                 </button>
               </div>
+              <textarea
+                value={editForm.remark}
+                onChange={(event) =>
+                  setEditForm((current) => (current ? { ...current, remark: event.target.value } : current))
+                }
+                placeholder="Remark"
+                rows={3}
+                className="min-h-24 rounded-md border border-input bg-card px-3 py-2 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/25"
+              />
             </div>
           </div>
         ) : null}
@@ -501,7 +665,7 @@ export default function AttendancePage() {
           </div>
         ) : (
           <div className="themed-scrollbar overflow-x-auto">
-            <table className="w-full min-w-[980px] border-collapse text-left">
+            <table className="w-full min-w-[1240px] border-collapse text-left">
               <thead className="bg-muted text-xs uppercase text-muted-foreground">
                 <tr>
                   <th className="px-4 py-3 font-semibold">Employee</th>
@@ -509,6 +673,9 @@ export default function AttendancePage() {
                   <th className="px-4 py-3 font-semibold">Check In</th>
                   <th className="px-4 py-3 font-semibold">Check Out</th>
                   <th className="px-4 py-3 font-semibold">Status</th>
+                  <th className="px-4 py-3 font-semibold">Remark</th>
+                  <th className="px-4 py-3 font-semibold">Late Time</th>
+                  <th className="px-4 py-3 font-semibold">Salary Cut</th>
                   <th className="px-4 py-3 text-right font-semibold">Actions</th>
                 </tr>
               </thead>
@@ -516,7 +683,7 @@ export default function AttendancePage() {
                 {isLoading ? (
                   Array.from({ length: 5 }).map((_, index) => (
                     <tr key={index}>
-                      {Array.from({ length: 6 }).map((__, cellIndex) => (
+                      {Array.from({ length: 9 }).map((__, cellIndex) => (
                         <td key={cellIndex} className="px-4 py-4">
                           <div className="h-4 animate-pulse rounded bg-muted" />
                         </td>
@@ -556,20 +723,45 @@ export default function AttendancePage() {
                         {record.check_out ?? "-"}
                       </td>
                       <td className="px-4 py-4">
-                        <span
-                          className={`inline-flex rounded-md px-2.5 py-1 text-xs font-bold capitalize ${statusClassName(
-                            record.status,
-                          )}`}
-                        >
-                          {record.status.replace("_", " ")}
-                        </span>
+                        <div className="flex flex-col items-start gap-1">
+                          <span
+                            className={`inline-flex rounded-md px-2.5 py-1 text-xs font-bold capitalize ${statusClassName(
+                              record.status,
+                            )}`}
+                          >
+                            {record.status.replace("_", " ")}
+                          </span>
+                          {record.status === "leave" &&
+                          (record.unpaid_leave !== undefined || record.paid_leave !== undefined) ? (
+                            <span className="text-xs font-medium text-muted-foreground">
+                              {record.unpaid_leave ?? record.paid_leave ? "Unpaid" : "Paid"}
+                            </span>
+                          ) : null}
+                        </div>
+                      </td>
+                      <td className="max-w-56 px-4 py-4 text-sm text-muted-foreground">
+                        <span className="line-clamp-2">{record.remark || "-"}</span>
+                      </td>
+                      <td className="px-4 py-4 text-sm font-medium text-foreground">
+                        {record.late_duration
+                          ? `${record.late_duration} (${record.late_minutes ?? 0} min)`
+                          : "-"}
+                      </td>
+                      <td className="px-4 py-4 text-sm font-medium text-foreground">
+                        {formatSalaryCut(record)}
                       </td>
                       <td className="px-4 py-4">
                         <div className="flex justify-end gap-2">
                           {record.id === null ? (
-                            <span className="inline-flex h-9 items-center rounded-md border border-border bg-muted px-3 text-xs font-semibold text-muted-foreground">
-                              No record
-                            </span>
+                            <button
+                              type="button"
+                              onClick={() => startEdit(record)}
+                              aria-label="Add attendance"
+                              className="inline-flex h-9 items-center gap-2 rounded-md border border-border bg-background px-3 text-xs font-semibold text-brand-sky transition-colors hover:bg-brand-sky hover:text-white"
+                            >
+                              <Plus aria-hidden="true" className="size-4" />
+                              Add
+                            </button>
                           ) : (
                             <>
                               <button
@@ -597,7 +789,7 @@ export default function AttendancePage() {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={6} className="px-4 py-12 text-center">
+                    <td colSpan={9} className="px-4 py-12 text-center">
                       <p className="text-sm font-semibold text-foreground">No attendance found</p>
                       <p className="mt-1 text-sm text-muted-foreground">
                         Change the filter or load another attendance view.

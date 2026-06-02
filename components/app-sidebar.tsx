@@ -23,7 +23,7 @@ const navItems: NavItem[] = [
   { label: "Dashboard", href: "/", icon: LayoutDashboard },
   { label: "Users", href: "/users", icon: Users },
   { label: "Attendance", href: "/attendance", icon: CalendarCheck },
-  { label: "Office Timing", href: "/office-timing", icon: Clock },
+  { label: "Attendance Settings", href: "/office-timing", icon: Clock },
 ];
 
 const profileNavItem: NavItem = {
@@ -99,6 +99,7 @@ export function AppSidebar({
             src="/logo.jpg"
             alt="Logo"
             fill
+            sizes="40px"
             className="object-cover"
             priority
           />

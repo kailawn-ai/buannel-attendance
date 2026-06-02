@@ -8,6 +8,8 @@ import { getCachedAuth, getCachedOrganizationName } from "@/lib/auth-cache";
 import {
   attendanceApi,
   LaravelApiError,
+  type OrganizationAttendancePolicy,
+  type OrganizationAttendancePolicyPayload,
   type OrganizationTiming,
   type OrganizationTimingPayload,
 } from "@/lib/api";
@@ -16,18 +18,32 @@ type TimingForm = {
   check_in_start: string;
   late_after: string;
   check_in_end: string;
+  half_day_after: string;
   check_out_start: string;
+};
+
+type PolicyForm = {
+  allow_half_day: boolean;
+  allow_leave: boolean;
+  annual_leave_limit: string;
 };
 
 const defaultTimingForm: TimingForm = {
   check_in_start: "09:00",
   late_after: "09:30",
   check_in_end: "10:00",
+  half_day_after: "13:00",
   check_out_start: "16:00",
 };
 
+const defaultPolicyForm: PolicyForm = {
+  allow_half_day: true,
+  allow_leave: true,
+  annual_leave_limit: "0",
+};
+
 const timingFields: Array<{
-  key: keyof TimingForm;
+  key: Extract<keyof TimingForm, "check_in_start" | "late_after" | "check_in_end" | "half_day_after" | "check_out_start">;
   label: string;
   caption: string;
 }> = [
@@ -51,6 +67,11 @@ const timingFields: Array<{
     label: "Check-out Opens",
     caption: "Employees can start checking out.",
   },
+  {
+    key: "half_day_after",
+    label: "Half-day After",
+    caption: "Attendance can be marked half-day from this time.",
+  },
 ];
 
 function getErrorMessage(caughtError: unknown) {
@@ -72,6 +93,7 @@ function toForm(timing: OrganizationTiming): TimingForm {
     check_in_start: toTimeInput(timing.check_in_start),
     late_after: toTimeInput(timing.late_after),
     check_in_end: toTimeInput(timing.check_in_end),
+    half_day_after: toTimeInput(timing.half_day_after),
     check_out_start: toTimeInput(timing.check_out_start),
   };
 }
@@ -81,7 +103,24 @@ function toPayload(form: TimingForm): OrganizationTimingPayload {
     check_in_start: toApiTime(form.check_in_start),
     late_after: toApiTime(form.late_after),
     check_in_end: toApiTime(form.check_in_end),
+    half_day_after: toApiTime(form.half_day_after),
     check_out_start: toApiTime(form.check_out_start),
+  };
+}
+
+function toPolicyForm(policy: OrganizationAttendancePolicy): PolicyForm {
+  return {
+    allow_half_day: policy.allow_half_day,
+    allow_leave: policy.allow_leave,
+    annual_leave_limit: String(policy.annual_leave_limit ?? 0),
+  };
+}
+
+function toPolicyPayload(form: PolicyForm): OrganizationAttendancePolicyPayload {
+  return {
+    allow_half_day: form.allow_half_day,
+    allow_leave: form.allow_leave,
+    annual_leave_limit: Number(form.annual_leave_limit || 0),
   };
 }
 
@@ -92,6 +131,14 @@ function timingOrderError(form: TimingForm) {
 
   if (form.late_after > form.check_in_end) {
     return "Late time must be before or equal to check-in close time.";
+  }
+
+  if (form.half_day_after < form.check_in_end) {
+    return "Half-day time must be after or equal to check-in close time.";
+  }
+
+  if (form.half_day_after > form.check_out_start) {
+    return "Half-day time must be before or equal to check-out open time.";
   }
 
   return null;
@@ -112,8 +159,8 @@ export default function OfficeTimingPage() {
       : "No organization cached");
   const organizationType =
     cachedAuth?.user.organization?.type ?? "organization";
-  const [timing, setTiming] = useState<OrganizationTiming | null>(null);
   const [form, setForm] = useState<TimingForm>(defaultTimingForm);
+  const [policyForm, setPolicyForm] = useState<PolicyForm>(defaultPolicyForm);
   const [isLoading, setIsLoading] = useState(true);
   const [isTimingLoading, setIsTimingLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -133,15 +180,17 @@ export default function OfficeTimingPage() {
       };
     }
 
-    attendanceApi.organizations.timing
-      .show(organizationId)
-      .then((response) => {
+    Promise.all([
+      attendanceApi.organizations.timing.show(organizationId),
+      attendanceApi.organizations.attendancePolicy.show(organizationId),
+    ])
+      .then(([timingResponse, policyResponse]) => {
         if (!isMounted) {
           return;
         }
 
-        setTiming(response.data);
-        setForm(toForm(response.data));
+        setForm(toForm(timingResponse.data));
+        setPolicyForm(toPolicyForm(policyResponse.data));
         setError(null);
       })
       .catch((caughtError: unknown) => {
@@ -171,6 +220,10 @@ export default function OfficeTimingPage() {
     setForm((current) => ({ ...current, [field]: value }));
   }
 
+  function updatePolicyField(field: keyof PolicyForm, value: string | boolean) {
+    setPolicyForm((current) => ({ ...current, [field]: value }));
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -182,14 +235,17 @@ export default function OfficeTimingPage() {
     setError(null);
 
     try {
-      const response = await attendanceApi.organizations.timing.update(
-        organizationId,
-        toPayload(form),
-      );
+      const [timingResponse, policyResponse] = await Promise.all([
+        attendanceApi.organizations.timing.update(organizationId, toPayload(form)),
+        attendanceApi.organizations.attendancePolicy.update(
+          organizationId,
+          toPolicyPayload(policyForm),
+        ),
+      ]);
 
-      setTiming(response.data);
-      setForm(toForm(response.data));
-      toast.success("Office timing updated successfully");
+      setForm(toForm(timingResponse.data));
+      setPolicyForm(toPolicyForm(policyResponse.data));
+      toast.success("Attendance settings updated successfully");
     } catch (caughtError) {
       const message = getErrorMessage(caughtError);
       setError(message);
@@ -205,14 +261,14 @@ export default function OfficeTimingPage() {
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="text-sm font-semibold text-brand-sky">
-              Office Timing
+              Attendance Settings
             </p>
             <h1 className="mt-2 text-3xl font-bold text-foreground">
-              Timing Management
+              Timing and Policy Management
             </h1>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
-              Manage organization-specific check-in, late, and check-out windows
-              used by the attendance API.
+              Manage organization-specific time windows separately from leave
+              and attendance policy rules.
             </p>
           </div>
         </div>
@@ -253,7 +309,7 @@ export default function OfficeTimingPage() {
                     {organizationName}
                   </h2>
                   <p className="mt-1 text-sm capitalize text-muted-foreground">
-                    {organizationType} timing profile
+                    {organizationType} attendance settings
                   </p>
                 </div>
               </div>
@@ -285,6 +341,60 @@ export default function OfficeTimingPage() {
               ))}
             </div>
 
+            <div className="border-t border-border pt-5">
+              <h3 className="text-base font-bold text-foreground">Attendance Policy</h3>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Leave and half-day rules are stored separately from office timing.
+              </p>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-3">
+              <label className="flex items-center justify-between gap-4 rounded-md border border-border bg-background p-4">
+                <span>
+                  <span className="block text-sm font-semibold text-foreground">Allow Half-day</span>
+                  <span className="mt-1 block text-xs leading-5 text-muted-foreground">
+                    Enable half-day attendance edits.
+                  </span>
+                </span>
+                <input
+                  type="checkbox"
+                  checked={policyForm.allow_half_day}
+                  onChange={(event) => updatePolicyField("allow_half_day", event.target.checked)}
+                  className="size-5 rounded border-input accent-primary"
+                />
+              </label>
+
+              <label className="flex items-center justify-between gap-4 rounded-md border border-border bg-background p-4">
+                <span>
+                  <span className="block text-sm font-semibold text-foreground">Allow Leave</span>
+                  <span className="mt-1 block text-xs leading-5 text-muted-foreground">
+                    Enable leave attendance edits.
+                  </span>
+                </span>
+                <input
+                  type="checkbox"
+                  checked={policyForm.allow_leave}
+                  onChange={(event) => updatePolicyField("allow_leave", event.target.checked)}
+                  className="size-5 rounded border-input accent-primary"
+                />
+              </label>
+
+              <label className="flex flex-col gap-2 rounded-md border border-border bg-background p-4">
+                <span className="text-sm font-semibold text-foreground">Annual Leave Limit</span>
+                <input
+                  type="number"
+                  min="0"
+                  max="366"
+                  value={policyForm.annual_leave_limit}
+                  onChange={(event) => updatePolicyField("annual_leave_limit", event.target.value)}
+                  className="h-11 rounded-md border border-input bg-card px-3 text-sm text-foreground outline-none transition-colors focus:border-ring focus:ring-2 focus:ring-ring/25"
+                />
+                <span className="text-xs leading-5 text-muted-foreground">
+                  Use 0 for no annual cap.
+                </span>
+              </label>
+            </div>
+
             {validationError ? (
               <div className="flex items-start gap-3 rounded-md border border-destructive/30 bg-destructive/10 p-4 text-destructive">
                 <AlertCircle
@@ -308,7 +418,7 @@ export default function OfficeTimingPage() {
                 ) : (
                   <Save aria-hidden="true" className="size-4" />
                 )}
-                {isSaving ? "Saving" : "Save Timing"}
+                {isSaving ? "Saving" : "Save Settings"}
               </button>
             </div>
           </form>

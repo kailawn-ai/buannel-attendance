@@ -10,6 +10,7 @@ import {
   attendanceApi,
   LaravelApiError,
   type Organization,
+  type StaffDetail,
   type UpdateUserPayload,
   type User,
 } from "@/lib/api";
@@ -24,6 +25,16 @@ type UserForm = {
   organization_id: string;
 };
 
+type StaffDetailForm = {
+  position: string;
+  department: string;
+  join_date: string;
+  salary: string;
+  salary_currency: string;
+  salary_frequency: string;
+  notes: string;
+};
+
 const emptyForm: UserForm = {
   employee_id: "",
   first_name: "",
@@ -34,8 +45,46 @@ const emptyForm: UserForm = {
   organization_id: "",
 };
 
+const emptyStaffDetailForm: StaffDetailForm = {
+  position: "",
+  department: "",
+  join_date: "",
+  salary: "",
+  salary_currency: "INR",
+  salary_frequency: "monthly",
+  notes: "",
+};
+
 function getUserName(user: User) {
   return user.name || [user.first_name, user.last_name].filter(Boolean).join(" ");
+}
+
+function formatDate(value?: string | null) {
+  if (!value) {
+    return "-";
+  }
+
+  return new Intl.DateTimeFormat("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).format(new Date(value));
+}
+
+function formatSalary(staffDetail?: StaffDetail | null) {
+  if (!staffDetail || staffDetail.salary === null || staffDetail.salary === undefined) {
+    return "Not provided";
+  }
+
+  try {
+    return `${new Intl.NumberFormat("en-IN", {
+      style: "currency",
+      currency: staffDetail.salary_currency || "INR",
+      maximumFractionDigits: 0,
+    }).format(staffDetail.salary)}${staffDetail.salary_frequency ? ` / ${staffDetail.salary_frequency}` : ""}`;
+  } catch {
+    return `${staffDetail.salary_currency || "INR"} ${staffDetail.salary}${staffDetail.salary_frequency ? ` / ${staffDetail.salary_frequency}` : ""}`;
+  }
 }
 
 function getErrorMessage(caughtError: unknown) {
@@ -56,7 +105,26 @@ function toForm(user: User): UserForm {
   };
 }
 
-function toPayload(form: UserForm): UpdateUserPayload {
+function toDateInput(value?: string | null) {
+  return value ? value.slice(0, 10) : "";
+}
+
+function toStaffDetailForm(staffDetail?: StaffDetail | null): StaffDetailForm {
+  return {
+    position: staffDetail?.position ?? "",
+    department: staffDetail?.department ?? "",
+    join_date: toDateInput(staffDetail?.join_date),
+    salary:
+      staffDetail?.salary === null || staffDetail?.salary === undefined
+        ? ""
+        : String(staffDetail.salary),
+    salary_currency: staffDetail?.salary_currency ?? "INR",
+    salary_frequency: staffDetail?.salary_frequency ?? "monthly",
+    notes: staffDetail?.notes ?? "",
+  };
+}
+
+function toPayload(form: UserForm, staffDetailForm: StaffDetailForm): UpdateUserPayload {
   return {
     employee_id: form.employee_id.trim(),
     first_name: form.first_name.trim(),
@@ -65,6 +133,15 @@ function toPayload(form: UserForm): UpdateUserPayload {
     device_id: form.device_id.trim() || null,
     profile_image: form.profile_image.trim() || null,
     organization_id: Number(form.organization_id),
+    staff_detail: {
+      position: staffDetailForm.position.trim() || null,
+      department: staffDetailForm.department.trim() || null,
+      join_date: staffDetailForm.join_date || null,
+      salary: staffDetailForm.salary.trim() ? Number(staffDetailForm.salary) : null,
+      salary_currency: staffDetailForm.salary_currency.trim().toUpperCase() || null,
+      salary_frequency: staffDetailForm.salary_frequency.trim() || null,
+      notes: staffDetailForm.notes.trim() || null,
+    },
   };
 }
 
@@ -74,6 +151,7 @@ export default function UpdateUserPage() {
   const [user, setUser] = useState<User | null>(null);
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [form, setForm] = useState<UserForm>(emptyForm);
+  const [staffDetailForm, setStaffDetailForm] = useState<StaffDetailForm>(emptyStaffDetailForm);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -90,6 +168,7 @@ export default function UpdateUserPage() {
         setUser(userResponse.data);
         setOrganizations(organizationsResponse.data);
         setForm(toForm(userResponse.data));
+        setStaffDetailForm(toStaffDetailForm(userResponse.data.staffDetail));
         setError(null);
       })
       .catch((caughtError: unknown) => {
@@ -118,15 +197,20 @@ export default function UpdateUserPage() {
     setForm((current) => ({ ...current, [field]: value }));
   }
 
+  function updateStaffDetailField(field: keyof StaffDetailForm, value: string) {
+    setStaffDetailForm((current) => ({ ...current, [field]: value }));
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setIsSaving(true);
     setError(null);
 
     try {
-      const response = await attendanceApi.users.update(params.id, toPayload(form));
+      const response = await attendanceApi.users.update(params.id, toPayload(form, staffDetailForm));
       setUser(response.data);
       setForm(toForm(response.data));
+      setStaffDetailForm(toStaffDetailForm(response.data.staffDetail));
       toast.success("User updated successfully");
       router.push("/users");
     } catch (caughtError) {
@@ -163,6 +247,50 @@ export default function UpdateUserPage() {
             Back to Users
           </Link>
         </div>
+      </section>
+
+      <section className="rounded-lg border border-border bg-card p-6 shadow-sm">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-semibold text-foreground">Staff Details</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              View employment details, compensation, and department information.
+            </p>
+          </div>
+        </div>
+
+        {user?.staffDetail ? (
+          <div className="mt-5 grid gap-4 sm:grid-cols-2">
+            <div className="rounded-md border border-border bg-secondary p-4">
+              <p className="text-sm font-semibold text-foreground">Position</p>
+              <p className="mt-2 text-sm text-muted-foreground">
+                {user.staffDetail.position || "Not specified"}
+              </p>
+            </div>
+            <div className="rounded-md border border-border bg-secondary p-4">
+              <p className="text-sm font-semibold text-foreground">Department</p>
+              <p className="mt-2 text-sm text-muted-foreground">
+                {user.staffDetail.department || "Not specified"}
+              </p>
+            </div>
+            <div className="rounded-md border border-border bg-secondary p-4">
+              <p className="text-sm font-semibold text-foreground">Join Date</p>
+              <p className="mt-2 text-sm text-muted-foreground">
+                {formatDate(user.staffDetail.join_date)}
+              </p>
+            </div>
+            <div className="rounded-md border border-border bg-secondary p-4">
+              <p className="text-sm font-semibold text-foreground">Salary</p>
+              <p className="mt-2 text-sm text-muted-foreground">
+                {formatSalary(user.staffDetail)}
+              </p>
+            </div>
+          </div>
+        ) : (
+          <p className="mt-5 text-sm text-muted-foreground">
+            No staff details are available for this user.
+          </p>
+        )}
       </section>
 
       <section className="rounded-lg border border-border bg-card p-6 shadow-sm">
@@ -259,6 +387,85 @@ export default function UpdateUserPage() {
                     </option>
                   ))}
                 </select>
+              </label>
+
+              <div className="border-t border-border pt-5 md:col-span-2">
+                <h2 className="text-lg font-semibold text-foreground">Edit Staff Details</h2>
+              </div>
+
+              <label className="flex flex-col gap-2">
+                <span className="text-sm font-semibold text-foreground">Position</span>
+                <input
+                  value={staffDetailForm.position}
+                  onChange={(event) => updateStaffDetailField("position", event.target.value)}
+                  className="h-11 rounded-md border border-input bg-background px-3 text-sm text-foreground outline-none transition-colors focus:border-ring focus:ring-2 focus:ring-ring/25"
+                />
+              </label>
+
+              <label className="flex flex-col gap-2">
+                <span className="text-sm font-semibold text-foreground">Department</span>
+                <input
+                  value={staffDetailForm.department}
+                  onChange={(event) => updateStaffDetailField("department", event.target.value)}
+                  className="h-11 rounded-md border border-input bg-background px-3 text-sm text-foreground outline-none transition-colors focus:border-ring focus:ring-2 focus:ring-ring/25"
+                />
+              </label>
+
+              <label className="flex flex-col gap-2">
+                <span className="text-sm font-semibold text-foreground">Join Date</span>
+                <input
+                  type="date"
+                  value={staffDetailForm.join_date}
+                  onChange={(event) => updateStaffDetailField("join_date", event.target.value)}
+                  className="h-11 rounded-md border border-input bg-background px-3 text-sm text-foreground outline-none transition-colors focus:border-ring focus:ring-2 focus:ring-ring/25"
+                />
+              </label>
+
+              <label className="flex flex-col gap-2">
+                <span className="text-sm font-semibold text-foreground">Salary</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={staffDetailForm.salary}
+                  onChange={(event) => updateStaffDetailField("salary", event.target.value)}
+                  className="h-11 rounded-md border border-input bg-background px-3 text-sm text-foreground outline-none transition-colors focus:border-ring focus:ring-2 focus:ring-ring/25"
+                />
+              </label>
+
+              <label className="flex flex-col gap-2">
+                <span className="text-sm font-semibold text-foreground">Salary Currency</span>
+                <input
+                  value={staffDetailForm.salary_currency}
+                  onChange={(event) => updateStaffDetailField("salary_currency", event.target.value)}
+                  maxLength={3}
+                  className="h-11 rounded-md border border-input bg-background px-3 text-sm uppercase text-foreground outline-none transition-colors focus:border-ring focus:ring-2 focus:ring-ring/25"
+                />
+              </label>
+
+              <label className="flex flex-col gap-2">
+                <span className="text-sm font-semibold text-foreground">Salary Frequency</span>
+                <select
+                  value={staffDetailForm.salary_frequency}
+                  onChange={(event) => updateStaffDetailField("salary_frequency", event.target.value)}
+                  className="h-11 rounded-md border border-input bg-background px-3 text-sm text-foreground outline-none transition-colors focus:border-ring focus:ring-2 focus:ring-ring/25"
+                >
+                  <option value="">Not specified</option>
+                  <option value="monthly">Monthly</option>
+                  <option value="yearly">Yearly</option>
+                  <option value="weekly">Weekly</option>
+                  <option value="daily">Daily</option>
+                </select>
+              </label>
+
+              <label className="flex flex-col gap-2 md:col-span-2">
+                <span className="text-sm font-semibold text-foreground">Notes</span>
+                <textarea
+                  value={staffDetailForm.notes}
+                  onChange={(event) => updateStaffDetailField("notes", event.target.value)}
+                  rows={3}
+                  className="resize-y rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground outline-none transition-colors focus:border-ring focus:ring-2 focus:ring-ring/25"
+                />
               </label>
             </div>
 

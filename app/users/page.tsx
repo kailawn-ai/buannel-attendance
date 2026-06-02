@@ -3,6 +3,7 @@
 import {
   AlertCircle,
   CalendarCheck,
+  Eye,
   Pencil,
   RefreshCw,
   Search,
@@ -43,6 +44,9 @@ export default function UsersPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [deletingUserId, setDeletingUserId] = useState<number | null>(null);
+  const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [detailsLoadingUserId, setDetailsLoadingUserId] = useState<number | null>(null);
+  const [detailsError, setDetailsError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const loadUsers = useCallback(async ({ silent = false } = {}) => {
@@ -140,6 +144,31 @@ export default function UsersPage() {
     });
   }, [searchTerm, users]);
 
+  async function handleViewDetails(user: User) {
+    if (selectedUser?.id === user.id) {
+      setSelectedUser(null);
+      setDetailsError(null);
+      return;
+    }
+
+    setDetailsLoadingUserId(user.id);
+    setDetailsError(null);
+
+    try {
+      const response = await attendanceApi.users.show(user.id);
+      setSelectedUser(response.data);
+    } catch (caughtError) {
+      setDetailsError(
+        caughtError instanceof LaravelApiError
+          ? caughtError.message
+          : "Unable to load staff details. Please try again.",
+      );
+      setSelectedUser(null);
+    } finally {
+      setDetailsLoadingUserId(null);
+    }
+  }
+
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
       <section className="rounded-lg border border-border bg-card p-6 shadow-soft">
@@ -161,6 +190,66 @@ export default function UsersPage() {
           </div>
         </div>
       </section>
+
+      {selectedUser ? (
+        <section className="rounded-lg border border-border bg-card p-6 shadow-sm">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm font-semibold text-brand-sky">Staff Details</p>
+              <h2 className="mt-2 text-2xl font-bold text-foreground">
+                {getUserName(selectedUser)}
+              </h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {selectedUser.staffDetail ? "Loaded from backend." : "No staff details available."}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => void handleViewDetails(selectedUser)}
+              className="inline-flex h-11 items-center justify-center rounded-md border border-border bg-background px-4 text-sm font-semibold text-foreground transition-colors hover:bg-secondary hover:text-secondary-foreground"
+            >
+              {detailsLoadingUserId === selectedUser.id ? "Refreshing" : "Hide details"}
+            </button>
+          </div>
+
+          {detailsError ? (
+            <div className="mt-5 rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+              {detailsError}
+            </div>
+          ) : null}
+
+          {selectedUser.staffDetail ? (
+            <div className="mt-5 grid gap-4 md:grid-cols-2">
+              <div className="rounded-md border border-border bg-secondary p-4">
+                <p className="text-sm font-semibold text-foreground">Position</p>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  {selectedUser.staffDetail.position || "Not specified"}
+                </p>
+              </div>
+              <div className="rounded-md border border-border bg-secondary p-4">
+                <p className="text-sm font-semibold text-foreground">Department</p>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  {selectedUser.staffDetail.department || "Not specified"}
+                </p>
+              </div>
+              <div className="rounded-md border border-border bg-secondary p-4">
+                <p className="text-sm font-semibold text-foreground">Join Date</p>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  {formatDate(selectedUser.staffDetail.join_date)}
+                </p>
+              </div>
+              <div className="rounded-md border border-border bg-secondary p-4">
+                <p className="text-sm font-semibold text-foreground">Salary</p>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  {selectedUser.staffDetail.salary !== null
+                    ? `${selectedUser.staffDetail.salary_currency || "INR"} ${selectedUser.staffDetail.salary}${selectedUser.staffDetail.salary_frequency ? ` / ${selectedUser.staffDetail.salary_frequency}` : ""}`
+                    : "Not provided"}
+                </p>
+              </div>
+            </div>
+          ) : null}
+        </section>
+      ) : null}
 
       <section className="rounded-lg border border-border bg-card shadow-sm">
         <div className="flex flex-col gap-3 border-b border-border p-4 md:flex-row md:items-center md:justify-between">
@@ -301,6 +390,20 @@ export default function UsersPage() {
                             </Link>
                             <span className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-2 -translate-x-1/2 rounded-md bg-foreground px-2 py-1 text-xs font-semibold text-background opacity-0 shadow-sm transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
                               Attendance
+                            </span>
+                          </div>
+                          <div className="group relative">
+                            <button
+                              type="button"
+                              onClick={() => void handleViewDetails(user)}
+                              aria-label={`View staff details for ${getUserName(user)}`}
+                              className="grid size-9 place-items-center rounded-md border border-border bg-background text-brand-sky transition-colors hover:bg-brand-sky hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+                              disabled={detailsLoadingUserId === user.id}
+                            >
+                              <Eye aria-hidden="true" className="size-4" />
+                            </button>
+                            <span className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-2 -translate-x-1/2 rounded-md bg-foreground px-2 py-1 text-xs font-semibold text-background opacity-0 shadow-sm transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+                              Details
                             </span>
                           </div>
                           <div className="group relative">

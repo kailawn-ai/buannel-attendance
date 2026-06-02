@@ -4,7 +4,7 @@ import { Building2, Clock, LogOut, Phone, UserCircle } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { attendanceApi, LaravelApiError, type User } from "@/lib/api";
+import { attendanceApi, LaravelApiError, type StaffDetail, type User } from "@/lib/api";
 import type { CachedAuth } from "@/lib/auth-cache";
 import { clearCachedAuth, getCachedAuth } from "@/lib/auth-cache";
 
@@ -12,10 +12,38 @@ function getUserName(user: Pick<User, "employee_id" | "first_name" | "last_name"
   return user.name || [user.first_name, user.last_name].filter(Boolean).join(" ") || user.employee_id;
 }
 
-function getErrorMessage(caughtError: unknown) {
+function formatErrorMessage(caughtError: unknown) {
   return caughtError instanceof LaravelApiError
     ? caughtError.message
     : "Unable to load profile details. Please check the backend API.";
+}
+
+function formatStaffSalary(staffDetail?: StaffDetail | null) {
+  if (!staffDetail || staffDetail.salary === null || staffDetail.salary === undefined) {
+    return "Not provided";
+  }
+
+  try {
+    return `${new Intl.NumberFormat("en-IN", {
+      style: "currency",
+      currency: staffDetail.salary_currency || "INR",
+      maximumFractionDigits: 0,
+    }).format(staffDetail.salary)}${staffDetail.salary_frequency ? ` / ${staffDetail.salary_frequency}` : ""}`;
+  } catch {
+    return `${staffDetail.salary_currency || "INR"} ${staffDetail.salary}${staffDetail.salary_frequency ? ` / ${staffDetail.salary_frequency}` : ""}`;
+  }
+}
+
+function formatDate(value?: string | null) {
+  if (!value) {
+    return "-";
+  }
+
+  return new Intl.DateTimeFormat("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).format(new Date(value));
 }
 
 function formatCachedAt(value: string) {
@@ -57,7 +85,7 @@ export default function ProfilePage() {
           return;
         }
 
-        setError(getErrorMessage(caughtError));
+        setError(formatErrorMessage(caughtError));
       })
       .finally(() => {
         if (!isMounted) {
@@ -144,7 +172,7 @@ export default function ProfilePage() {
         </div>
       ) : null}
 
-      <section className="grid gap-4 md:grid-cols-2">
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         <div className="rounded-lg border border-border bg-card p-5 shadow-sm">
           <div className="flex items-center gap-3">
             <Phone aria-hidden="true" className="size-5 text-brand-sky" />
@@ -164,6 +192,46 @@ export default function ProfilePage() {
             {isLoading
               ? "Loading..."
               : user?.organization?.name ?? `Organization #${profileUser.organization_id}`}
+          </p>
+        </div>
+
+        <div className="rounded-lg border border-border bg-card p-5 shadow-sm">
+          <div className="flex items-center gap-3">
+            <UserCircle aria-hidden="true" className="size-5 text-brand-sky" />
+            <p className="text-sm font-bold text-foreground">Position</p>
+          </div>
+          <p className="mt-3 text-sm text-muted-foreground">
+            {isLoading ? "Loading..." : user?.staffDetail?.position || "Not specified"}
+          </p>
+        </div>
+
+        <div className="rounded-lg border border-border bg-card p-5 shadow-sm">
+          <div className="flex items-center gap-3">
+            <Building2 aria-hidden="true" className="size-5 text-brand-sky" />
+            <p className="text-sm font-bold text-foreground">Department</p>
+          </div>
+          <p className="mt-3 text-sm text-muted-foreground">
+            {isLoading ? "Loading..." : user?.staffDetail?.department || "Not specified"}
+          </p>
+        </div>
+
+        <div className="rounded-lg border border-border bg-card p-5 shadow-sm">
+          <div className="flex items-center gap-3">
+            <Clock aria-hidden="true" className="size-5 text-brand-sky" />
+            <p className="text-sm font-bold text-foreground">Join Date</p>
+          </div>
+          <p className="mt-3 text-sm text-muted-foreground">
+            {isLoading ? "Loading..." : formatDate(user?.staffDetail?.join_date)}
+          </p>
+        </div>
+
+        <div className="rounded-lg border border-border bg-card p-5 shadow-sm">
+          <div className="flex items-center gap-3">
+            <Building2 aria-hidden="true" className="size-5 text-brand-sky" />
+            <p className="text-sm font-bold text-foreground">Salary</p>
+          </div>
+          <p className="mt-3 text-sm text-muted-foreground">
+            {isLoading ? "Loading..." : formatStaffSalary(user?.staffDetail)}
           </p>
         </div>
 
