@@ -147,6 +147,7 @@ export type AttendanceSummary = {
   total_late_minutes: number;
   total_late_duration: string;
   total_salary_cut: number;
+  payable_salary: number;
   leave_days: number;
   annual_leave_taken: number;
   annual_leave_limit: number;

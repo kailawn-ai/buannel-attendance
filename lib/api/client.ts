@@ -96,6 +96,41 @@ async function readJson<T>(response: Response): Promise<T | null> {
   return (await response.json()) as T;
 }
 
+async function downloadFile(path: string, filename: string, query: AttendanceQuery = {}) {
+  const requestHeaders = new Headers();
+  const adminAccessToken = getStoredAdminAccessToken();
+
+  if (adminAccessToken) {
+    requestHeaders.set("X-Admin-Access-Token", adminAccessToken);
+  }
+
+  const response = await fetch(buildUrl(path, includeViewerQuery(query)), {
+    cache: "no-store",
+    headers: requestHeaders,
+  });
+
+  if (!response.ok) {
+    const payload = await readJson<ApiFailure>(response);
+
+    throw new LaravelApiError(
+      response.status,
+      payload?.status === false ? payload : null,
+      response.statusText || "File download failed",
+    );
+  }
+
+  const blob = await response.blob();
+  const downloadUrl = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+
+  link.href = downloadUrl;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(downloadUrl);
+}
+
 function getStoredAdminAccessToken(): string | null {
   if (typeof window === "undefined") {
     return null;
@@ -285,6 +320,18 @@ export const attendanceApi = {
       apiRequest<Attendance[]>(`/attendance/user/${employeeId}`, {
         query: includeViewerQuery(query),
       }),
+    adminExcel: (query: AttendanceQuery = {}) =>
+      downloadFile(
+        "/attendance/admin/excel",
+        `admin-attendance-${query.month ?? "all"}.csv`,
+        query,
+      ),
+    byUserExcel: (employeeId: string, query: AttendanceQuery = {}) =>
+      downloadFile(
+        `/attendance/user/${employeeId}/excel`,
+        `attendance-history-${employeeId}-${query.month ?? "current"}.csv`,
+        query,
+      ),
     update: (id: number | string, payload: UpdateAttendancePayload, query: ViewerQuery = {}) =>
       apiRequest<Attendance>(`/attendance/update/${id}`, {
         method: "PUT",

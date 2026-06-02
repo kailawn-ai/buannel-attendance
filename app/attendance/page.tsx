@@ -3,6 +3,7 @@
 import {
   AlertCircle,
   CalendarCheck,
+  Download,
   Pencil,
   Plus,
   RefreshCw,
@@ -132,8 +133,8 @@ function formatSalaryCut(record: Attendance) {
   }
 }
 
-function formatSummarySalaryCut(summary: AttendanceSummary | null, records: Attendance[]) {
-  if (!summary) {
+function formatSummaryCurrency(value: number | null | undefined, records: Attendance[]) {
+  if (value === undefined || value === null) {
     return "-";
   }
 
@@ -144,9 +145,9 @@ function formatSummarySalaryCut(summary: AttendanceSummary | null, records: Atte
       style: "currency",
       currency,
       maximumFractionDigits: 2,
-    }).format(summary.total_salary_cut);
+    }).format(value);
   } catch {
-    return `${currency} ${summary.total_salary_cut.toFixed(2)}`;
+    return `${currency} ${value.toFixed(2)}`;
   }
 }
 
@@ -194,8 +195,18 @@ export default function AttendancePage() {
   const [error, setError] = useState<string | null>(null);
 
   const fetchAttendance = useCallback(
-    async ({ silent = false } = {}) => {
-      if (mode === "user" && !employeeId.trim()) {
+    async ({
+      silent = false,
+      nextMode = mode,
+      nextEmployeeId = employeeId,
+      nextMonth = month,
+    }: {
+      silent?: boolean;
+      nextMode?: AttendanceMode;
+      nextEmployeeId?: string;
+      nextMonth?: string;
+    } = {}) => {
+      if (nextMode === "user" && !nextEmployeeId.trim()) {
         setError("Enter an employee ID to load user attendance.");
         setRecords([]);
         setAttendanceSummary(null);
@@ -211,10 +222,10 @@ export default function AttendancePage() {
       setError(null);
 
       try {
-        const response = await loadAttendanceRecords(mode, employeeId, month);
+        const response = await loadAttendanceRecords(nextMode, nextEmployeeId, nextMonth);
 
         setRecords(response.data);
-        setAttendanceSummary(mode === "user" ? response.summary ?? null : null);
+        setAttendanceSummary(nextMode === "user" ? response.summary ?? null : null);
       } catch (caughtError) {
         const message = getErrorMessage(caughtError);
         setError(message);
@@ -226,6 +237,11 @@ export default function AttendancePage() {
     },
     [employeeId, mode, month],
   );
+
+  function selectMode(nextMode: AttendanceMode) {
+    setMode(nextMode);
+    void fetchAttendance({ silent: true, nextMode });
+  }
 
   useEffect(() => {
     let isMounted = true;
@@ -410,6 +426,31 @@ export default function AttendancePage() {
     }
   }
 
+  async function downloadExcelReport() {
+    if (mode === "all") {
+      return;
+    }
+
+    if (filteredRecords.length === 0) {
+      toast.info("No attendance records available to export.");
+      return;
+    }
+
+    try {
+      if (mode === "month") {
+        await attendanceApi.attendance.adminExcel({ month });
+      } else {
+        await attendanceApi.attendance.byUserExcel(employeeId.trim(), { month });
+      }
+
+      toast.success("Excel download started.");
+    } catch (caughtError) {
+      const message = getErrorMessage(caughtError);
+      setError(message);
+      toast.error(message);
+    }
+  }
+
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
       <section className="rounded-lg border border-border bg-card p-6 shadow-soft">
@@ -453,13 +494,13 @@ export default function AttendancePage() {
           <div className="flex w-full flex-nowrap gap-1 sm:w-auto sm:gap-2">
             {([
               ["all", "All Records"],
-              ["month", "Monthly Admin"],
+              ["month", "Monthly"],
               ["user", "User History"],
             ] as const).map(([value, label]) => (
               <button
                 key={value}
                 type="button"
-                onClick={() => setMode(value)}
+                onClick={() => selectMode(value)}
                 className={`h-9 min-w-0 flex-1 whitespace-nowrap rounded-md px-2 text-[11px] font-semibold transition-colors sm:h-10 sm:flex-none sm:px-4 sm:text-sm ${
                   mode === value
                     ? "bg-primary text-primary-foreground"
@@ -506,23 +547,37 @@ export default function AttendancePage() {
               ) : null}
             </div>
 
-            <button
-              type="button"
-              onClick={() => void fetchAttendance({ silent: true })}
-              disabled={isLoading || isRefreshing}
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-md border border-border bg-background px-4 text-sm font-semibold text-foreground transition-colors hover:bg-secondary hover:text-secondary-foreground disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              <RefreshCw
-                aria-hidden="true"
-                className={`size-4 ${isRefreshing ? "animate-spin" : ""}`}
-              />
-              Load Records
-            </button>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              {mode !== "all" ? (
+                <button
+                  type="button"
+                  onClick={() => void downloadExcelReport()}
+                  disabled={isLoading || filteredRecords.length === 0}
+                  className="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-primary px-4 text-sm font-semibold text-primary-foreground transition-colors hover:bg-brand-blue disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <Download aria-hidden="true" className="size-4" />
+                  Excel
+                </button>
+              ) : null}
+
+              <button
+                type="button"
+                onClick={() => void fetchAttendance({ silent: true })}
+                disabled={isLoading || isRefreshing}
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-md border border-border bg-background px-4 text-sm font-semibold text-foreground transition-colors hover:bg-secondary hover:text-secondary-foreground disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <RefreshCw
+                  aria-hidden="true"
+                  className={`size-4 ${isRefreshing ? "animate-spin" : ""}`}
+                />
+                Load Records
+              </button>
+            </div>
           </div>
         </div>
 
         {mode === "user" && attendanceSummary ? (
-          <div className="grid gap-3 border-b border-border p-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+          <div className="grid gap-3 border-b border-border p-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-7">
             <div className="rounded-md border border-border bg-secondary px-4 py-3">
               <p className="text-xs font-medium text-muted-foreground">Late Duration</p>
               <p className="mt-2 text-lg font-bold text-foreground">
@@ -544,7 +599,13 @@ export default function AttendancePage() {
             <div className="rounded-md border border-border bg-secondary px-4 py-3">
               <p className="text-xs font-medium text-muted-foreground">Salary Cut</p>
               <p className="mt-2 text-lg font-bold text-destructive">
-                {formatSummarySalaryCut(attendanceSummary, records)}
+                {formatSummaryCurrency(attendanceSummary.total_salary_cut, records)}
+              </p>
+            </div>
+            <div className="rounded-md border border-border bg-secondary px-4 py-3">
+              <p className="text-xs font-medium text-muted-foreground">Payable Salary</p>
+              <p className="mt-2 text-lg font-bold text-success">
+                {formatSummaryCurrency(attendanceSummary.payable_salary, records)}
               </p>
             </div>
             <div className="rounded-md border border-border bg-secondary px-4 py-3">
